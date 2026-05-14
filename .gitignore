@@ -1,0 +1,8 @@
+.serena/
+__pycache__/
+*.py[cod]
+
+osbc/logs/
+osbc/config/chromium-profile/
+osbc/*.pid
+osbc/*.log
