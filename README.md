@@ -14,3 +14,8 @@ I think a clever design would be a dual-evolution of two separate parts:
  - MCP server the agent utilizes to interface with & use the bot.
 
 Each of these parts will complement & help to evolve the other, for a unique development loop with clear goals, speedy development, and quality of MCP usage by agents.
+
+
+
+<br/> &nbsp;
+<sub>[license](LICENSE)</sub>
