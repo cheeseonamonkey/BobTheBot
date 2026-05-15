@@ -1,0 +1,38 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "bobthebot"
+version = "0.1.0"
+description = "Agent-controlled OSRS automation runtime and MCP interface."
+readme = "README.md"
+requires-python = ">=3.11"
+license = { file = "LICENSE" }
+authors = [{ name = "BobTheBot contributors" }]
+dependencies = [
+  "websockets>=12",
+]
+
+[project.optional-dependencies]
+cv = [
+  "mss>=9",
+  "numpy>=1.26",
+  "opencv-python>=4.9",
+]
+dev = [
+  "pytest>=8",
+  "radon>=6",
+]
+
+[project.scripts]
+bobthebot-mcp = "bobthebot.mcp_server:main"
+bobthebot-run = "bobthebot.cli:main"
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["bobthebot*"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["."]

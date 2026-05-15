@@ -1,0 +1,297 @@
+from __future__ import annotations
+
+import argparse
+import json
+import shutil
+import subprocess
+import sys
+from pathlib import Path
+
+from .app import BotApp
+from .mcp_server import BobMcpServer
+
+
+from typing import Any
+
+(
+    "status",
+    "start",
+    "stop",
+    "backends",
+    "tasks",
+    "tools",
+    "tool",
+    "doctor",
+    "demo-view",
+    "auth-status",
+    "auth-view",
+    "observe",
+    "script",
+    "view",
+) = (
+    "status",
+    "start",
+    "stop",
+    "backends",
+    "tasks",
+    "tools",
+    "tool",
+    "doctor",
+    "demo-view",
+    "auth-status",
+    "auth-view",
+    "observe",
+    "script",
+    "view",
+) = (
+    "status",
+    "start",
+    "stop",
+    "backends",
+    "tasks",
+    "tools",
+    "tool",
+    "doctor",
+    "auth-status",
+    "auth-view",
+    "observe",
+    "script",
+    "view",
+)
+
+def main() -> None:
+    parser = argparse.ArgumentParser(prog="bobthebot-run")
+    parser.add_argument("command", choices=COMMANDS)
+    parser.add_argument("target", nargs="?", help="Tool name for 'tool', script path for 'script', or file path for 'view'.")
+    parser.add_argument("kv_args", nargs="*", help="key=value arguments for the 'tool' command.")
+    parser.add_argument("--backend", default="null", choices=["null", "x11-cv", "dreambot"])
+    parser.add_argument("--name", help="Tool name for the 'tool' command (deprecated, use positional).")
+    parser.add_argument("--args", default="{}", help="JSON object arguments for the 'tool' command.")
+    parser.add_argument("--profile", default="default", help="Auth profile for auth-status/auth-view.")
+    parser.add_argument("--renderer", default="auto", choices=["auto", "chafa", "none"], help="Terminal image renderer.")
+    parser.add_argument("--view-size", default="100x40", help="Terminal render size, passed to chafa as WIDTHxHEIGHT.")
+    args = parser.parse_args()
+
+    app = BotApp(backend_name=args.backend)
+    result = run_command(app, args, parser)
+
+    if args.command != "script":
+        maybe_render(result, args.renderer, args.view_size)
+        print(json.dumps(result, indent=2))
+
+
+def run_command(app: BotApp, args: argparse.Namespace, parser: argparse.ArgumentParser) -> dict[str, Any]:
+    if args.command == "start":
+        app.processes.start_xvfb()
+        app.processes.start_runelite()
+        return app.status()
+    if args.command == "stop":
+        app.engine.stop()
+        app.processes.stop_all()
+        return app.status()
+    if args.command == "backends":
+        return app.list_backends()
+    if args.command == "tasks":
+        return {"tasks": app.engine.tasks()}
+    if args.command == "tools":
+        return list_tools(app)
+    if args.command == "tool":
+        return call_tool(app, args, parser)
+    if args.command == "doctor":
+        return doctor(app)
+    if args.command == "demo-view":
+        return demo_view(app)
+    if args.command == "auth-status":
+        return app.auth.status(args.profile)
+    if args.command == "auth-view":
+        return app.auth.screenshot(args.profile)
+    if args.command == "observe":
+        return app.engine.observe()
+    if args.command == "script":
+        return run_script(app, args, parser)
+    if args.command == "view":
+        if not args.target:
+            parser.error("file path is required for 'view'")
+        return {"path": args.target}
+    return app.status()
+
+
+def list_tools(app: BotApp) -> dict[str, Any]:
+    server = BobMcpServer(app)
+    return {
+        "tools": [
+            {"name": tool.name, "description": tool.description}
+            for tool in server.tools.values()
+        ]
+    }
+
+
+def doctor(app: BotApp) -> dict[str, Any]:
+    config = app.config
+    browser = app.processes.find_browser()
+    checks = {
+        "browser": bool(browser),
+        "runtime_dir": config.runtime_dir.exists(),
+        "credentials_file": config.auth_credentials_file.exists(),
+    }
+    return {
+        "ok": all(value for key, value in checks.items() if key != "credentials_file"),
+        "checks": checks,
+        "paths": {
+            "root": str(config.root),
+            "runtime": str(config.runtime_dir),
+            "logs": str(config.logs_dir),
+            "auth_credentials": str(config.auth_credentials_file),
+        },
+        "executables": {
+            "browser": browser,
+            "chafa": shutil.which("chafa"),
+            "xvfb": shutil.which("Xvfb"),
+            "java": shutil.which("java"),
+        },
+        "processes": app.processes.status(),
+        "next": [
+            "bobthebot-run demo-view",
+            "bobthebot-run tools",
+            "bobthebot-run tool bob_status",
+            "bobthebot-run auth-status --renderer none",
+        ],
+    }
+
+
+def demo_view(app: BotApp) -> dict[str, Any]:
+    path = app.config.logs_dir / "demo-view.ppm"
+    write_demo_ppm(path)
+    return {
+        "ok": True,
+        "path": str(path),
+        "message": "Generated deterministic demo image; chafa should render this in-terminal.",
+    }
+
+
+def write_demo_ppm(path: Path, width: int = 96, height: int = 48) -> Path:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    header = f"P6\n{width} {height}\n255\n".encode("ascii")
+    pixels = bytearray()
+    for y in range(height):
+        for x in range(width):
+            band = 42 if ((x // 8) + (y // 4)) % 2 else 0
+            red = min(255, 40 + x * 2 + band)
+            green = min(255, 80 + y * 3 + band)
+            blue = min(255, 180 + ((x + y) % 32) * 2)
+            pixels.extend((red, green, blue))
+    path.write_bytes(header + pixels)
+    return path
+
+
+def parse_tool_args(args: argparse.Namespace, parser: argparse.ArgumentParser) -> dict[str, Any]:
+    if args.args != "{}" and args.kv_args:
+        parser.error("use either --args JSON or key=value arguments, not both")
+    if args.args != "{}":
+        parsed = json.loads(args.args)
+        if not isinstance(parsed, dict):
+            parser.error("arguments must decode to a JSON object")
+        return parsed
+    tool_args: dict[str, Any] = {}
+    for kv in args.kv_args:
+        if "=" not in kv:
+            parser.error(f"Invalid key=value pair: {kv}")
+        key, value = kv.split("=", 1)
+        try:
+            tool_args[key] = json.loads(value)
+        except json.JSONDecodeError:
+            tool_args[key] = value
+    return tool_args
+
+
+def unwrap_tool_response(response: dict[str, Any]) -> dict[str, Any]:
+    content = response.get("result", {}).get("content", [])
+    if content and isinstance(content[0], dict) and content[0].get("type") == "text":
+        try:
+            payload = json.loads(content[0]["text"])
+            return payload if isinstance(payload, dict) else {"value": payload}
+        except (json.JSONDecodeError, TypeError):
+            pass
+    return response
+
+
+
+def call_mcp_tool(app: BotApp, tool_name: str, tool_args: dict[str, Any]) -> dict[str, Any]:
+    response = BobMcpServer(app).handle(
+        {
+            "jsonrpc": "2.0",
+            "id": 1,
+            "method": "tools/call",
+            "params": {"name": tool_name, "arguments": tool_args},
+        }
+    )
+    if response is None:
+        return {"ok": False, "error": "MCP call produced no response"}
+    return unwrap_tool_response(response)
+
+def call_tool(app: BotApp, args: argparse.Namespace, parser: argparse.ArgumentParser) -> dict[str, Any]:
+    tool_name = args.target or args.name
+    if not tool_name:
+        parser.error("tool name is required; run 'bobthebot-run tools' to inspect available tools")
+    return call_mcp_tool(app, tool_name, parse_tool_args(args, parser))
+
+
+def run_script(app: BotApp, args: argparse.Namespace, parser: argparse.ArgumentParser) -> dict:
+    if not args.target:
+        parser.error("script path is required")
+    path = Path(args.target)
+    if not path.exists():
+        print(f"Script not found: {path}", file=sys.stderr)
+        return {"ok": False, "error": "file not found"}
+    
+    with open(path) as f:
+        code = f.read()
+    
+    ctx = {"app": app, "BotApp": BotApp, "render": lambda p: render_image(Path(p), args.renderer, args.view_size)}
+    exec(code, ctx)
+    return {"ok": True}
+
+
+
+def iter_render_payloads(result: dict[str, Any]):
+    yield result
+    content = result.get("result", {}).get("content", []) if isinstance(result.get("result"), dict) else []
+    for item in content:
+        if isinstance(item, dict) and item.get("type") == "text":
+            try:
+                inner = json.loads(item["text"])
+            except (json.JSONDecodeError, TypeError):
+                continue
+            if isinstance(inner, dict):
+                yield inner
+    data = result.get("data")
+    if isinstance(data, dict):
+        yield data
+
+
+def is_image_path(value: Any) -> bool:
+    return isinstance(value, str) and value.lower().endswith((".png", ".jpg", ".jpeg", ".ppm"))
+
+def maybe_render(result: Any, renderer: str, size: str) -> None:
+    if renderer == "none" or not isinstance(result, dict):
+        return
+    for nested in iter_render_payloads(result):
+        for key in ("screenshot", "path", "file"):
+            value = nested.get(key)
+            if isinstance(value, str) and is_image_path(value):
+                render_image(Path(value), renderer, size)
+                return
+
+
+def render_image(path: Path, renderer: str = "auto", size: str = "100x40") -> bool:
+    if renderer == "none":
+        return False
+    executable = shutil.which("chafa") if renderer in ("auto", "chafa") else None
+    if not executable:
+        return False
+    subprocess.run([executable, "--symbols", "block", "--size", size, str(path)], check=False, stdout=sys.stderr)
+    return True
+
+
+if __name__ == "__main__":
+    main()

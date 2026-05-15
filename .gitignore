@@ -6,3 +6,7 @@ osbc/logs/
 osbc/config/chromium-profile/
 osbc/*.pid
 osbc/*.log
+.runtime/
+.venv/
+*.egg-info/
+.pytest_cache/
