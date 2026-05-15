@@ -1,157 +1,118 @@
 # BobTheBot
-**An AI-centered OSRS bot implementation.**
 
-I guess we are attempting to bootstrap a useful/unique OSRS bot implementation without ever manually doing a thing _(ie. never opening a browser, installing the game, knowing how to play, or even seeing the game with human eyes at all!)_.
+**An AI-controlled OSRS bot runtime — developed entirely by AI agents, never by hand.**
 
-I've never even played Runescape; I do remember seeings kids in the library play it in like 2007. _Surely that's good enough!_
+The goal: bootstrap a working OSRS bot without a human ever opening a browser, installing the game, or seeing it. An agent does all of it through the MCP server.
 
-**This bot will be soley intended to be controlled by an AI agent** like Claude Code, Codex, Gemini CLI, OpenThumb *(my own AI agent harness)*, etc... 
+Two things co-evolve:
+- **The bot runtime** — backends, task engine, auth automation, CV pipeline
+- **The MCP server** — the agent's interface into the bot
 
-I'm aware it has an active and advanced botting community, and I hear it has fascinating econ-sim elements that would fun to experiement with.
+---
 
-I think a clever design would be a dual-evolution of two separate parts:
- - our bot implementation itself *(not sure the details; assuming CV, lots of mouse interaction and keyboard input, perhaps stochastic or probabilistic aspects, hard & soft waits, heavily abstracted scripting heirarchy, etc.)*
- - MCP server the agent utilizes to interface with & use the bot.
-
-Each of these parts will complement & help to evolve the other, for a unique development loop with clear goals, speedy development, and quality of MCP usage by agents.
-
-## Current Foundation
-
-The project now has a clean Python package in `bobthebot/` that separates the agent-facing interface from the game/runtime implementation:
-
-- `bobthebot.mcp_server` exposes a small MCP-compatible JSON-RPC stdio server.
-- `bobthebot.engine` owns lifecycle, task execution, and thread state.
-- `bobthebot.backends` contains interchangeable runtime adapters.
-- `bobthebot.processes` owns Xvfb/RuneLite/Chromium process supervision.
-- `bobthebot.tasks` contains task definitions that should depend on runtime capabilities, not raw subprocesses or CV internals.
-
-The old `osbc/` prototype is retained as reference material and compatibility glue. The new package is the direction for future development.
-
-## Runtime Backends
-
-`null`
-: Safe default backend for testing MCP and engine behavior without a game client.
-
-`x11-cv`
-: Uses Xvfb/X11 tooling, screenshots, and raw input. This is the natural path for RuneLite plus CV work.
-
-`dreambot`
-: Talks to the local Java bridge in `Scripts/MCPBridge.java` at `http://127.0.0.1:19132`. This backend can expose semantic game state when DreamBot is running the bridge script.
-
-## Quick Start
-
-Create an environment and install the package:
+## Install
 
 ```bash
-python3 -m venv .venv
-. .venv/bin/activate
-python -m pip install -e '.[dev]'
+python3 -m venv .venv && source .venv/bin/activate
+pip install -e ".[dev]"       # core + tests
+pip install -e ".[dev,cv]"    # + computer-vision backend
 ```
 
-Run tests:
+## Quick start
 
 ```bash
-pytest
+bobthebot-run doctor          # check deps and paths
+bobthebot-run demo-view       # render test image via chafa
+bobthebot-run status          # process + engine state
+bobthebot-run tools           # list all MCP tools
+bobthebot-run start           # launch Xvfb + RuneLite
+bobthebot-run observe         # snapshot current game state
+bobthebot-run observe --watch 2   # live refresh every 2 s
 ```
 
-Inspect local status without launching RuneLite:
+## Backends
 
-```bash
-bobthebot-run status
-```
+| Name | Description |
+|------|-------------|
+| `null` | Safe no-game backend for testing (default) |
+| `x11-cv` | X11 screenshot + raw input (requires `[cv]`) |
+| `dreambot` | Semantic API via local DreamBot HTTP bridge |
 
-Inspect task/backend metadata:
+Select with `--backend NAME` on any command.
 
-```bash
-bobthebot-run backends
-bobthebot-run tasks
-```
+## MCP server
 
-Call an MCP tool without an MCP client:
-
-```bash
-bobthebot-run tool --name bob_task_schema --args '{"task": "mining"}'
-```
-
-Run the MCP stdio server:
+Exposes all tools over stdio (JSON-RPC 2.0) for use with Claude Desktop, Claude Code, or any MCP client:
 
 ```bash
 bobthebot-mcp
 ```
 
-## MCP Tools
+Run `bobthebot-run tools` for the full tool list.
 
-The MCP surface is intentionally small at this stage:
+## CLI reference
 
-- `bob_status`
-- `bob_backend_list`
-- `bob_backend_set` / `bob_set_backend`
-- `bob_runtime_status`
-- `bob_start_runtime`
-- `bob_stop_runtime`
-- `bob_observe`
-- `bob_player`
-- `bob_inventory`
-- `bob_skills`
-- `bob_nearby`
-- `bob_task_list`
-- `bob_task_schema`
-- `bob_engine_start`
-- `bob_engine_stop`
-- `bob_engine_pause`
-- `bob_engine_resume`
-- `bob_set_task`
-- `bob_task_set`
-- `bob_interact`
-- `bob_click`
-- `bob_type_text`
-- `bob_press_key`
-- `bob_auth_save_credentials`
-- `bob_auth_forget_credentials`
-- `bob_auth_status`
-- `bob_auth_register_start`
-- `bob_auth_login_start`
-- `bob_auth_continue`
-- `bob_auth_screenshot`
-- `bob_auth_open`
-- `bob_auth_verification_check`
+```
+bobthebot-run COMMAND [target] [KEY=VALUE ...] [options]
 
-## Auth Automation
+Commands:
+  status           Process + engine status
+  start / stop     Start or stop Xvfb + RuneLite
+  backends         List available backends
+  tasks            List available bot tasks
+  tools            List MCP tools
+  tool NAME        Call an MCP tool (e.g. tool bob_set_task task=mining)
+  observe          Snapshot game state (--watch N for live loop)
+  view PATH        Render an image file via chafa
+  demo-view        Generate + render a test image
+  auth-status      Auth browser state
+  auth-view        Screenshot the auth browser
+  script PATH      Run a Python script with app in scope
+  doctor           Check dependencies and paths
 
-BobTheBot has a Chrome DevTools Protocol auth layer for agent-driven registration/login:
-
-```bash
-bobthebot-run tool --name bob_auth_save_credentials --args '{"profile":"main","email":"you@example.com","password":"plaintext"}'
-bobthebot-run tool --name bob_auth_register_start --args '{"profile":"main","display_name":"Bob","submit":true}'
-bobthebot-run tool --name bob_auth_continue --args '{"profile":"main","email_code":"123456"}'
-bobthebot-run auth-view --profile main --view-size 100x40
+Options:
+  --backend        null | x11-cv | dreambot  (default: null)
+  --renderer       auto | chafa | none
+  --view-size      WIDTHxHEIGHT for chafa  (default: 100x40)
+  --watch SECS     Live-loop interval for observe
+  --profile        Auth profile name  (default: default)
+  --args JSON      JSON arguments for tool command
 ```
 
-The implementation uses `google-chrome` first, then Chromium fallbacks. Credentials are intentionally stored as plaintext under `.runtime/auth/credentials.json` for speed and agent reuse, with password redaction in tool outputs. CAPTCHA/security checks are detected and surfaced with state/screenshot data rather than bypassed.
+Exit code is 1 when the result contains `"error"` or `"ok": false`.
 
-`auth-view` captures the current auth browser screenshot and renders it inline with `chafa` when available. It still prints JSON with the screenshot path, so agents can parse the result while humans can see the page state in-terminal.
+## Auth
 
-Email-code automation checks providers in this order:
+Credentials live at `.runtime/auth/credentials.json`.
 
-- `BOBTHEBOT_EMAIL_CODE` or `BOBTHEBOT_EMAIL_CODE_<PROFILE>` for direct env-var injection.
-- `BOBTHEBOT_EMAIL_CODE_COMMAND` for a local command that prints a 6-8 digit code. The command receives `BOBTHEBOT_PROFILE`, `BOBTHEBOT_EMAIL`, and `BOBTHEBOT_PURPOSE`.
-- IMAP via `BOBTHEBOT_IMAP_HOST`, `BOBTHEBOT_IMAP_USER`, `BOBTHEBOT_IMAP_PASSWORD`, and optional `BOBTHEBOT_IMAP_MAILBOX`.
+```bash
+bobthebot-run tool bob_auth_save_credentials email=you@example.com password=hunter2
+bobthebot-run auth-status
+bobthebot-run tool bob_auth_login_start email=you@example.com password=hunter2
+bobthebot-run tool bob_auth_continue email_code=123456
+bobthebot-run auth-view   # renders browser screenshot in-terminal
+```
 
-Future tools should stay agent-oriented. Prefer stable intent/state tools over dumping every low-level game action into MCP.
+Email-code providers (checked in order): `BOBTHEBOT_EMAIL_CODE` env var → `BOBTHEBOT_EMAIL_CODE_COMMAND` shell command → IMAP (`BOBTHEBOT_IMAP_HOST/USER/PASSWORD`).
 
-Tool inputs are validated at the MCP boundary: required fields, unknown fields, primitive types, enum values, string emptiness, and numeric bounds all fail before runtime code is invoked.
+## Dev rules
 
-Tasks also own config schemas. `bob_task_list` exposes task metadata, and `bob_task_schema` exposes the exact accepted config for a selected task.
+- Task logic must not depend on CV, DreamBot HTTP, Java, or shell commands directly — use backend capabilities.
+- MCP stays thin: it adapts calls to `BotApp`/`BotEngine`, not own core behavior.
+- Tests must pass without RuneLite, Xvfb, DreamBot, or a browser.
 
-## Development Rules
+```bash
+pytest
+```
 
-- Keep task logic independent of CV, DreamBot HTTP, Java, and shell commands.
-- Add capabilities to backend adapters first, then let tasks consume those capabilities through narrow methods.
-- Keep MCP thin. It should adapt tool calls to `BotApp`/`BotEngine`, not own core behavior.
-- Tests must pass without RuneLite, DreamBot, Xvfb, Chromium, or OSRS access.
-- Generated logs, PID files, profiles, local jars, and credentials should stay out of Git.
+## Dependencies
 
+- Python ≥ 3.11
+- `chafa` — terminal image rendering (`apt install chafa`)
+- `google-chrome` — auth browser automation
+- `java` — RuneLite
+- `Xvfb` — virtual display (`apt install xvfb`)
 
+---
 
-<br/> &nbsp;
 <sub>[license](LICENSE)</sub>
