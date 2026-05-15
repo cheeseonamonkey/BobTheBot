@@ -30,7 +30,7 @@ class DreamBotBridgeBackend:
         if query:
             url = f"{url}?{query}"
         with urllib.request.urlopen(url, timeout=self.timeout) as response:
-            return json.loads(response.read().decode("utf-8"))
+            return json.loads(response.read())
 
     def status(self) -> RuntimeStatus:
         try:
@@ -42,7 +42,7 @@ class DreamBotBridgeBackend:
 
     def observe(self) -> Observation:
         data = {
-            "status": self.status(),
+            "status": self.status().to_dict(),
             "player": self.player(),
             "inventory": self.inventory(),
             "skills": self.skills(),

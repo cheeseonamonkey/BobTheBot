@@ -44,9 +44,7 @@ class BotConfig:
     def browser_profile(self) -> Path:
         return self.config_dir / "browser-profile"
 
-    @property
-    def chromium_profile(self) -> Path:
-        return self.browser_profile
+    
 
     @property
     def auth_dir(self) -> Path:

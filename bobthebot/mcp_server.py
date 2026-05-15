@@ -1,8 +1,10 @@
 from __future__ import annotations
 
+import base64
 import json
 import sys
 from collections.abc import Callable
+from pathlib import Path
 from typing import Any
 
 from .app import BotApp
@@ -46,9 +48,9 @@ class BobMcpServer:
             }
         if method == "ping":
             return {}
-        if method in ("tools/list", "list_tools"):
+        if method == "tools/list":
             return {"tools": [tool.as_mcp() for tool in self.tools.values()]}
-        if method in ("tools/call", "call_tool"):
+        if method == "tools/call":
             name, arguments = self._tool_call_args(message)
             if arguments is None:
                 return self._tool_error(f"{name}: arguments must be an object")
@@ -71,11 +73,21 @@ class BobMcpServer:
 
     def _tool_response(self, payload: Any, is_error: bool = False) -> Json:
         try:
+            image_path = None
+            if isinstance(payload, dict):
+                image_path = payload.pop("__image_path__", None)
             text = json.dumps(payload, allow_nan=False)
         except (TypeError, ValueError) as exc:
             fallback = {"error": f"Tool returned non-JSON-serializable payload: {exc}"}
             return {"content": [{"type": "text", "text": json.dumps(fallback)}], "isError": True}
-        return {"content": [{"type": "text", "text": text}], "isError": is_error}
+        content = [{"type": "text", "text": text}]
+        if image_path and Path(image_path).exists():
+            try:
+                data = base64.b64encode(Path(image_path).read_bytes()).decode()
+                content.append({"type": "image", "data": data, "mimeType": "image/png"})
+            except Exception:
+                pass
+        return {"content": content, "isError": is_error}
 
     def _tool_error(self, message: str) -> Json:
         return self._tool_response({"error": message}, True)
@@ -143,8 +155,19 @@ class BobMcpServer:
         self._require_capability(capability)
         return action()
 
-    def _compact_backend_value(self, value: Json) -> Json:
-        return compact_dict(value)
+    def _player(self, args: Json) -> Json:
+        self._require_capability("player")
+        return compact_dict(self.app.engine.backend.player())
+
+    def _inventory(self, args: Json) -> Json:
+        self._require_capability("inventory")
+        return compact_dict(self.app.engine.backend.inventory())
+
+    def _skills(self, args: Json) -> Json:
+        self._require_capability("skills")
+        return compact_dict(self.app.engine.backend.skills())
+
+    
 
     def _require_capability(self, capability: str) -> None:
         capabilities = set(getattr(self.app.engine.backend, "capabilities", ()))
@@ -191,6 +214,18 @@ class BobMcpServer:
 
     def _auth_screenshot(self, args: Json) -> Json:
         return self.app.auth.screenshot(str(args.get("profile", "default")))
+
+    def _observe(self, args: Json) -> Json:
+        result = self.app.engine.observe()
+        path = result.get("screenshot") or result.get("path") or result.get("file")
+        if path:
+            result["__image_path__"] = path
+        return result
+
+    def _view(self, args: Json) -> Json:
+        profile = str(args.get("profile", "default"))
+        path = self.app.auth.screenshot(profile)
+        return {"path": str(path), "__image_path__": str(path)}
 
     def _auth_open(self, args: Json) -> Json:
         return self.app.auth.open(str(args["url"]))

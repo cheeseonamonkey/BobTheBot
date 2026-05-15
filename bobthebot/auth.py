@@ -174,11 +174,16 @@ class AuthService:
         if not creds:
             return AuthResult(False, "missing_credentials", "Provide email/password or save credentials first.")
         self.processes.start_browser(url)
-        asyncio.run(self.browser.navigate(url))
-        fill_result = asyncio.run(self._fill_credentials(creds["email"], creds["password"], kwargs))
-        if kwargs.get("submit", True):
-            fill_result["submit_clicked"] = asyncio.run(self.browser.click_first(SUBMIT_SELECTORS))
-            time.sleep(1.0)
+
+        async def _flow() -> dict[str, Any]:
+            await self.browser.navigate(url)
+            fill = await self._fill_credentials(creds["email"], creds["password"], kwargs)
+            if kwargs.get("submit", True):
+                fill["submit_clicked"] = await self.browser.click_first(SUBMIT_SELECTORS)
+                await asyncio.sleep(1.0)
+            return fill
+
+        fill_result = asyncio.run(_flow())
         state = self._snapshot_result("submitted", f"{mode} flow submitted.")
         if state.state == "awaiting_email_code":
             code = self.verification.fetch_code(profile, creds["email"], mode)

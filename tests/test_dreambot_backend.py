@@ -3,24 +3,16 @@ from urllib.parse import parse_qs, urlparse
 from bobthebot.backends.dreambot import DreamBotBridgeBackend
 from bobthebot.models import EntityRef
 
+from conftest import FakeResponseCtx
+
 
 def test_dreambot_interact_url_encoding(monkeypatch):
     seen = {}
 
-    class FakeResponse:
-        def __enter__(self):
-            return self
-
-        def __exit__(self, *args):
-            return None
-
-        def read(self):
-            return b'{"ok": true}'
-
     def fake_urlopen(url, timeout):
         seen["url"] = url
         seen["timeout"] = timeout
-        return FakeResponse()
+        return FakeResponseCtx(b'{"ok": true}')
 
     monkeypatch.setattr("urllib.request.urlopen", fake_urlopen)
 
@@ -44,25 +36,8 @@ def test_dreambot_inventory_and_skills_models(monkeypatch):
         "/api/skills": {"mining": {"level": 5, "xp": 388, "boosted": 6}},
     }
 
-    class FakeResponse:
-        def __init__(self, payload):
-            self.payload = payload
-
-        def __enter__(self):
-            return self
-
-        def __exit__(self, *args):
-            return None
-
-        def read(self):
-            import json
-
-            return json.dumps(self.payload).encode()
-
     def fake_urlopen(url, timeout):
-        from urllib.parse import urlparse
-
-        return FakeResponse(responses[urlparse(url).path])
+        return FakeResponseCtx.json(responses[urlparse(url).path])
 
     monkeypatch.setattr("urllib.request.urlopen", fake_urlopen)
     backend = DreamBotBridgeBackend()
@@ -77,25 +52,8 @@ def test_dreambot_models_tolerate_malformed_numbers(monkeypatch):
         "/api/skills": {"mining": {"level": None, "xp": "bad", "boosted": "7"}},
     }
 
-    class FakeResponse:
-        def __init__(self, payload):
-            self.payload = payload
-
-        def __enter__(self):
-            return self
-
-        def __exit__(self, *args):
-            return None
-
-        def read(self):
-            import json
-
-            return json.dumps(self.payload).encode()
-
     def fake_urlopen(url, timeout):
-        from urllib.parse import urlparse
-
-        return FakeResponse(responses[urlparse(url).path])
+        return FakeResponseCtx.json(responses[urlparse(url).path])
 
     monkeypatch.setattr("urllib.request.urlopen", fake_urlopen)
     backend = DreamBotBridgeBackend()

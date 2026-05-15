@@ -51,75 +51,6 @@ class IdleTask(Task):
 
 
 @dataclass
-class MiningTask(Task):
-    target_name: str = "rock"
-    action: str = "Mine"
-    radius: int = 15
-    last_action_at: float = field(default=0.0)
-    cooldown: float = 5.0
-
-    def __post_init__(self) -> None:
-        self.name = "mining"
-        self.required_capabilities = ("semantic_interact",)
-
-    def execute(self, engine: BotEngine) -> bool:
-        now = time.time()
-        if now - self.last_action_at < self.cooldown:
-            return True
-        result = engine.backend.interact(
-            EntityRef(kind="object", name=self.target_name, action=self.action, radius=self.radius)
-        )
-        engine.last_result = result.to_dict()
-        if result.ok:
-            self.last_action_at = now
-        return True
-
-    @classmethod
-    def describe(cls) -> dict[str, object]:
-        return {
-            "name": "mining",
-            "description": "Repeatedly interacts with a nearby mineable object through semantic runtime APIs.",
-            "input_schema": cls.input_schema(),
-            "required_capabilities": ["semantic_interact"],
-        }
-
-    @classmethod
-    def input_schema(cls) -> dict[str, Any]:
-        return {
-            "type": "object",
-            "properties": {
-                "target_name": {
-                    "type": "string",
-                    "default": "rock",
-                    "minLength": 1,
-                    "description": "Object name substring to mine.",
-                },
-                "action": {
-                    "type": "string",
-                    "default": "Mine",
-                    "minLength": 1,
-                    "description": "Interaction action.",
-                },
-                "radius": {
-                    "type": "integer",
-                    "default": 15,
-                    "minimum": 1,
-                    "maximum": 100,
-                    "description": "Search radius in tiles for semantic backends.",
-                },
-                "cooldown": {
-                    "type": "number",
-                    "default": 5.0,
-                    "minimum": 0.0,
-                    "maximum": 300.0,
-                    "description": "Minimum seconds between interaction attempts.",
-                },
-            },
-            "additionalProperties": False,
-        }
-
-
-@dataclass
 class InteractTask(Task):
     kind: str = "npc"
     target_name: str = ""
@@ -191,6 +122,35 @@ class InteractTask(Task):
             },
             "additionalProperties": False,
         }
+
+
+@dataclass
+class MiningTask(InteractTask):
+    kind: str = "object"
+    target_name: str = "rock"
+    action: str = "Mine"
+
+    def __post_init__(self) -> None:
+        self.name = "mining"
+        self.required_capabilities = ("semantic_interact",)
+
+    @classmethod
+    def describe(cls) -> dict[str, object]:
+        return {
+            "name": "mining",
+            "description": "Repeatedly mines a nearby rock via semantic interact.",
+            "input_schema": cls.input_schema(),
+            "required_capabilities": ["semantic_interact"],
+        }
+
+    @classmethod
+    def input_schema(cls) -> dict[str, Any]:
+        schema = super().input_schema()
+        props = schema["properties"]
+        props["target_name"]["default"] = "rock"
+        props["action"]["default"] = "Mine"
+        props.pop("kind", None)
+        return schema
 
 @dataclass(frozen=True)
 class TaskSpec:

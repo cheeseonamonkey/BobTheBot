@@ -5,15 +5,14 @@ import json
 import shutil
 import subprocess
 import sys
+import time
 from pathlib import Path
+from typing import Any
 
 from .app import BotApp
 from .mcp_server import BobMcpServer
 
-
-from typing import Any
-
-(
+COMMANDS = (
     "status",
     "start",
     "stop",
@@ -23,35 +22,6 @@ from typing import Any
     "tool",
     "doctor",
     "demo-view",
-    "auth-status",
-    "auth-view",
-    "observe",
-    "script",
-    "view",
-) = (
-    "status",
-    "start",
-    "stop",
-    "backends",
-    "tasks",
-    "tools",
-    "tool",
-    "doctor",
-    "demo-view",
-    "auth-status",
-    "auth-view",
-    "observe",
-    "script",
-    "view",
-) = (
-    "status",
-    "start",
-    "stop",
-    "backends",
-    "tasks",
-    "tools",
-    "tool",
-    "doctor",
     "auth-status",
     "auth-view",
     "observe",
@@ -60,16 +30,19 @@ from typing import Any
 )
 
 def main() -> None:
-    parser = argparse.ArgumentParser(prog="bobthebot-run")
-    parser.add_argument("command", choices=COMMANDS)
+    parser = argparse.ArgumentParser(
+        prog="bobthebot-run",
+        description="BobTheBot CLI — control the bot engine, MCP tools, and auth browser.",
+    )
+    parser.add_argument("command", choices=COMMANDS, metavar="COMMAND")
     parser.add_argument("target", nargs="?", help="Tool name for 'tool', script path for 'script', or file path for 'view'.")
-    parser.add_argument("kv_args", nargs="*", help="key=value arguments for the 'tool' command.")
+    parser.add_argument("kv_args", nargs="*", metavar="KEY=VALUE", help="key=value arguments for the 'tool' command.")
     parser.add_argument("--backend", default="null", choices=["null", "x11-cv", "dreambot"])
-    parser.add_argument("--name", help="Tool name for the 'tool' command (deprecated, use positional).")
     parser.add_argument("--args", default="{}", help="JSON object arguments for the 'tool' command.")
     parser.add_argument("--profile", default="default", help="Auth profile for auth-status/auth-view.")
     parser.add_argument("--renderer", default="auto", choices=["auto", "chafa", "none"], help="Terminal image renderer.")
     parser.add_argument("--view-size", default="100x40", help="Terminal render size, passed to chafa as WIDTHxHEIGHT.")
+    parser.add_argument("--watch", type=float, metavar="SECONDS", help="Loop observe every N seconds (live monitor mode).")
     args = parser.parse_args()
 
     app = BotApp(backend_name=args.backend)
@@ -77,7 +50,10 @@ def main() -> None:
 
     if args.command != "script":
         maybe_render(result, args.renderer, args.view_size)
+        sys.stderr.flush()
         print(json.dumps(result, indent=2))
+        if isinstance(result, dict) and (result.get("error") or result.get("ok") is False):
+            sys.exit(1)
 
 
 def run_command(app: BotApp, args: argparse.Namespace, parser: argparse.ArgumentParser) -> dict[str, Any]:
@@ -106,7 +82,15 @@ def run_command(app: BotApp, args: argparse.Namespace, parser: argparse.Argument
     if args.command == "auth-view":
         return app.auth.screenshot(args.profile)
     if args.command == "observe":
-        return app.engine.observe()
+        while True:
+            result = app.engine.observe()
+            if args.watch:
+                maybe_render(result, args.renderer, args.view_size)
+                print(json.dumps(result, indent=2))
+                time.sleep(args.watch)
+                print("\033[2J\033[H", end="", flush=True)
+            else:
+                return result
     if args.command == "script":
         return run_script(app, args, parser)
     if args.command == "view":
@@ -160,8 +144,7 @@ def doctor(app: BotApp) -> dict[str, Any]:
 
 
 def demo_view(app: BotApp) -> dict[str, Any]:
-    path = app.config.logs_dir / "demo-view.ppm"
-    write_demo_ppm(path)
+    path = write_demo_png(app.config.logs_dir / "demo-view.png")
     return {
         "ok": True,
         "path": str(path),
@@ -169,18 +152,34 @@ def demo_view(app: BotApp) -> dict[str, Any]:
     }
 
 
-def write_demo_ppm(path: Path, width: int = 96, height: int = 48) -> Path:
+def write_demo_png(path: Path, width: int = 96, height: int = 48) -> Path:
+    import struct
+    import zlib
+
     path.parent.mkdir(parents=True, exist_ok=True)
-    header = f"P6\n{width} {height}\n255\n".encode("ascii")
-    pixels = bytearray()
+    rows = []
     for y in range(height):
+        row = bytearray()
         for x in range(width):
             band = 42 if ((x // 8) + (y // 4)) % 2 else 0
-            red = min(255, 40 + x * 2 + band)
-            green = min(255, 80 + y * 3 + band)
-            blue = min(255, 180 + ((x + y) % 32) * 2)
-            pixels.extend((red, green, blue))
-    path.write_bytes(header + pixels)
+            row += bytes([
+                min(255, 40 + x * 2 + band),
+                min(255, 80 + y * 3 + band),
+                min(255, 180 + ((x + y) % 32) * 2),
+            ])
+        rows.append(b"\x00" + bytes(row))
+
+    def chunk(tag: bytes, data: bytes) -> bytes:
+        c = tag + data
+        return struct.pack(">I", len(data)) + c + struct.pack(">I", zlib.crc32(c) & 0xFFFFFFFF)
+
+    png = (
+        b"\x89PNG\r\n\x1a\n"
+        + chunk(b"IHDR", struct.pack(">IIBBBBB", width, height, 8, 2, 0, 0, 0))
+        + chunk(b"IDAT", zlib.compress(b"".join(rows)))
+        + chunk(b"IEND", b"")
+    )
+    path.write_bytes(png)
     return path
 
 
@@ -230,7 +229,7 @@ def call_mcp_tool(app: BotApp, tool_name: str, tool_args: dict[str, Any]) -> dic
     return unwrap_tool_response(response)
 
 def call_tool(app: BotApp, args: argparse.Namespace, parser: argparse.ArgumentParser) -> dict[str, Any]:
-    tool_name = args.target or args.name
+    tool_name = args.target
     if not tool_name:
         parser.error("tool name is required; run 'bobthebot-run tools' to inspect available tools")
     return call_mcp_tool(app, tool_name, parse_tool_args(args, parser))

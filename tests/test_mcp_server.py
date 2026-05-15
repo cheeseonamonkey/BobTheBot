@@ -1,12 +1,12 @@
+import io
 import json
+import sys
+from typing import Any
+from urllib.parse import urlparse
 
 from bobthebot.mcp_server import BobMcpServer
 
-
-import io
-import sys
-
-from typing import Any
+from conftest import FakeResponseCtx
 
 def call(server: BobMcpServer, method: str, params: Any = None, request_id: int = 1) -> dict[str, Any]:
     payload: dict[str, Any] = {"jsonrpc": "2.0", "id": request_id, "method": method}
@@ -35,9 +35,10 @@ def test_tools_list_uses_mcp_method_name():
     names = {tool["name"] for tool in response["result"]["tools"]}
     assert "bob_status" in names
     assert "bob_set_backend" in names
-    assert "bob_backend_set" in names
-    assert "bob_task_set" in names
+    assert "bob_set_task" in names
     assert "bob_task_schema" in names
+    assert "bob_backend_set" not in names
+    assert "bob_task_set" not in names
 
 
 def test_call_status_tool_returns_structured_payload():
@@ -146,7 +147,7 @@ def test_incompatible_task_returns_tool_error_not_jsonrpc_error():
     response = call(
         BobMcpServer(),
         "tools/call",
-        {"name": "bob_task_set", "arguments": {"task": "mining"}},
+        {"name": "bob_set_task", "arguments": {"task": "mining"}},
     )
 
     assert "error" not in response
@@ -158,7 +159,7 @@ def test_task_config_validation_returns_tool_error():
     response = call(
         BobMcpServer(),
         "tools/call",
-        {"name": "bob_task_set", "arguments": {"task": "mining", "radius": "near"}},
+        {"name": "bob_set_task", "arguments": {"task": "mining", "radius": "near"}},
     )
 
     assert response["result"]["isError"] is True
@@ -169,7 +170,7 @@ def test_validation_rejects_non_finite_numbers():
     response = call(
         BobMcpServer(),
         "tools/call",
-        {"name": "bob_task_set", "arguments": {"task": "mining", "cooldown": float("nan")}},
+        {"name": "bob_set_task", "arguments": {"task": "mining", "cooldown": float("nan")}},
     )
 
     assert response["result"]["isError"] is True
@@ -191,7 +192,7 @@ def test_tool_schemas_disallow_extra_properties():
     response = call(BobMcpServer(), "tools/list")
 
     for tool in response["result"]["tools"]:
-        if tool["name"] in ("bob_set_task", "bob_task_set"):
+        if tool["name"] == "bob_set_task":
             assert tool["inputSchema"]["additionalProperties"] is True
         else:
             assert tool["inputSchema"]["additionalProperties"] is False
@@ -271,27 +272,12 @@ def test_dreambot_semantic_tools_parse_state(monkeypatch):
         "/api/objects": {"count": 1, "objects": [{"name": "Copper rocks"}]},
     }
 
-    class FakeResponse:
-        def __init__(self, payload):
-            self.payload = payload
-
-        def __enter__(self):
-            return self
-
-        def __exit__(self, *args):
-            return None
-
-        def read(self):
-            return json.dumps(self.payload).encode()
-
     def fake_urlopen(url, timeout):
-        from urllib.parse import urlparse
-
-        return FakeResponse(responses[urlparse(url).path])
+        return FakeResponseCtx.json(responses[urlparse(url).path])
 
     monkeypatch.setattr("urllib.request.urlopen", fake_urlopen)
     server = BobMcpServer()
-    call(server, "tools/call", {"name": "bob_backend_set", "arguments": {"backend": "dreambot"}})
+    call(server, "tools/call", {"name": "bob_set_backend", "arguments": {"backend": "dreambot"}})
 
     player = tool_payload(call(server, "tools/call", {"name": "bob_player", "arguments": {}}))
     inventory = tool_payload(call(server, "tools/call", {"name": "bob_inventory", "arguments": {}}))

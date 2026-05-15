@@ -29,14 +29,14 @@ def validate_json_object(schema: dict[str, Any], values: dict[str, Any], label: 
 
 def validate_json_value(label: str, key: str, value: Any, prop: dict[str, Any]) -> None:
     expected = prop.get("type")
-    validators = {
-        "string": _validate_string,
-        "integer": _validate_integer,
-        "number": _validate_number,
-        "boolean": _validate_boolean,
-    }
-    if expected in validators:
-        validators[expected](label, key, value, prop)
+    if expected == "string":
+        _validate_string(label, key, value, prop)
+    elif expected == "integer":
+        _validate_integer(label, key, value)
+    elif expected == "number":
+        _validate_number(label, key, value, prop)
+    elif expected == "boolean":
+        _validate_boolean(label, key, value)
     if "enum" in prop and value not in prop["enum"]:
         raise ValueError(f"{label}: {key} must be one of {prop['enum']}")
     if isinstance(value, int | float) and not isinstance(value, bool):
@@ -50,7 +50,7 @@ def _validate_string(label: str, key: str, value: Any, prop: dict[str, Any]) -> 
         raise ValueError(f"{label}: {key} must not be empty")
 
 
-def _validate_integer(label: str, key: str, value: Any, prop: dict[str, Any]) -> None:
+def _validate_integer(label: str, key: str, value: Any) -> None:
     if not isinstance(value, int) or isinstance(value, bool):
         raise ValueError(f"{label}: {key} must be an integer")
 
@@ -62,7 +62,7 @@ def _validate_number(label: str, key: str, value: Any, prop: dict[str, Any]) -> 
         raise ValueError(f"{label}: {key} must be finite")
 
 
-def _validate_boolean(label: str, key: str, value: Any, prop: dict[str, Any]) -> None:
+def _validate_boolean(label: str, key: str, value: Any) -> None:
     if not isinstance(value, bool):
         raise ValueError(f"{label}: {key} must be a boolean")
 

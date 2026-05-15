@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from .auth import AuthService
+from .backends.base import BotBackend
 from .config import BotConfig, default_config
 from .engine import BotEngine
 from .processes import ProcessSupervisor
@@ -20,7 +21,7 @@ class BotApp:
         self.auth = AuthService(self.config, self.processes)
         self.engine = BotEngine(self.config, self._make_backend(backend_name))
 
-    def _make_backend(self, name: str):
+    def _make_backend(self, name: str) -> BotBackend:
         return self.backends.create(name, self.config)
 
     def set_backend(self, name: str) -> dict[str, object]:

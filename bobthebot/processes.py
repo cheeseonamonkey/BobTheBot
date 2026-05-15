@@ -73,8 +73,7 @@ class ProcessSupervisor:
             env=env,
         )
 
-    def start_chromium(self, url: str | None = None) -> bool:
-        return self.start_browser(url)
+    
 
     def find_browser(self) -> str | None:
         candidates = [
@@ -119,7 +118,7 @@ class ProcessSupervisor:
         return self._start("browser", cmd, env=env)
 
     def stop_all(self) -> None:
-        for name in ("browser", "chromium", "runelite", "xvfb"):
+        for name in ("browser", "runelite", "xvfb"):
             self.stop_process(name)
 
     def stop_process(self, name: str) -> None:
@@ -138,4 +137,4 @@ class ProcessSupervisor:
             pid_file.unlink(missing_ok=True)
 
     def status(self) -> dict[str, bool]:
-        return {name: self.is_running(name) for name in ("xvfb", "runelite", "browser", "chromium")}
+        return {name: self.is_running(name) for name in ("xvfb", "runelite", "browser")}

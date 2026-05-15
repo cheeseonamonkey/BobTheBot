@@ -17,7 +17,7 @@ def test_cli_tasks_outputs_task_list(capsys, monkeypatch):
 def test_cli_tool_invokes_mcp_tool(capsys, monkeypatch):
     monkeypatch.setattr(
         "sys.argv",
-        ["bobthebot-run", "tool", "--name", "bob_task_schema", "--args", '{"task": "idle"}'],
+        ["bobthebot-run", "tool", "bob_task_schema", "--args", '{"task": "idle"}'],
     )
 
     cli.main()
@@ -64,7 +64,7 @@ def test_cli_demo_view_generates_renderable_image(capsys, monkeypatch):
 
     payload = json.loads(capsys.readouterr().out)
     assert payload["ok"] is True
-    assert payload["path"].endswith("demo-view.ppm")
+    assert payload["path"].endswith("demo-view.png")
     assert Path(payload["path"]).exists()
 
 

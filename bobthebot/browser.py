@@ -5,6 +5,7 @@ import base64
 import json
 import time
 import urllib.request
+from contextlib import asynccontextmanager
 from pathlib import Path
 from typing import Any
 
@@ -60,7 +61,7 @@ class BrowserController:
     def _websocket_from_endpoint(self, endpoint: str) -> str | None:
         try:
             with urllib.request.urlopen(endpoint, timeout=2) as response:
-                data = json.loads(response.read().decode("utf-8"))
+                data = json.loads(response.read())
         except OSError:
             return None
         if isinstance(data, dict):
@@ -91,65 +92,57 @@ class BrowserController:
             await asyncio.sleep(1.0)
             return await self.page_snapshot(cdp)
 
+    @asynccontextmanager
+    async def _cdp(self, cdp: CdpClient | None = None):
+        if cdp is not None:
+            yield cdp
+        else:
+            async with CdpClient(self.wait_for_websocket_url()) as client:
+                yield client
+
     async def page_snapshot(self, cdp: CdpClient | None = None) -> dict[str, Any]:
-        owns_client = cdp is None
-        if cdp is None:
-            cdp = CdpClient(self.wait_for_websocket_url())
-            await cdp.__aenter__()
-        try:
-            title = await self.evaluate("document.title", cdp=cdp)
-            url = await self.evaluate("location.href", cdp=cdp)
-            text = await self.evaluate("document.body ? document.body.innerText : ''", cdp=cdp)
+        async with self._cdp(cdp) as client:
+            title = await self.evaluate("document.title", cdp=client)
+            url = await self.evaluate("location.href", cdp=client)
+            text = await self.evaluate("document.body ? document.body.innerText : ''", cdp=client)
             return {"title": title, "url": url, "text": text}
-        finally:
-            if owns_client:
-                await cdp.__aexit__(None, None, None)
 
     async def evaluate(self, expression: str, cdp: CdpClient | None = None) -> Any:
-        owns_client = cdp is None
-        if cdp is None:
-            cdp = CdpClient(self.wait_for_websocket_url())
-            await cdp.__aenter__()
-        try:
-            result = await cdp.send("Runtime.evaluate", {"expression": expression, "returnByValue": True})
-            value = result.get("result", {})
-            return value.get("value")
-        finally:
-            if owns_client:
-                await cdp.__aexit__(None, None, None)
+        async with self._cdp(cdp) as client:
+            result = await client.send("Runtime.evaluate", {"expression": expression, "returnByValue": True})
+            if "exceptionDetails" in result:
+                raise RuntimeError(f"JS evaluation failed: {result['exceptionDetails']}")
+            return result.get("result", {}).get("value")
 
     async def fill_first(self, selectors: list[str], text: str) -> bool:
-        expression = """
-        (() => {
-          const selectors = %s;
-          const text = %s;
-          for (const selector of selectors) {
+        s, t = json.dumps(selectors), json.dumps(text)
+        expression = f"""(() => {{
+          const selectors = {s};
+          const text = {t};
+          for (const selector of selectors) {{
             const el = document.querySelector(selector);
             if (!el) continue;
-            el.focus();
-            el.value = text;
-            el.dispatchEvent(new Event('input', {bubbles: true}));
-            el.dispatchEvent(new Event('change', {bubbles: true}));
+            el.focus(); el.value = text;
+            el.dispatchEvent(new Event('input', {{bubbles: true}}));
+            el.dispatchEvent(new Event('change', {{bubbles: true}}));
             return true;
-          }
+          }}
           return false;
-        })()
-        """ % (json.dumps(selectors), json.dumps(text))
+        }})()"""
         return bool(await self.evaluate(expression))
 
     async def click_first(self, selectors: list[str]) -> bool:
-        expression = """
-        (() => {
-          const selectors = %s;
-          for (const selector of selectors) {
+        s = json.dumps(selectors)
+        expression = f"""(() => {{
+          const selectors = {s};
+          for (const selector of selectors) {{
             const el = document.querySelector(selector);
             if (!el) continue;
             el.click();
             return true;
-          }
+          }}
           return false;
-        })()
-        """ % json.dumps(selectors)
+        }})()"""
         return bool(await self.evaluate(expression))
 
     async def screenshot(self, path: Path) -> Path:
@@ -158,3 +151,7 @@ class BrowserController:
         path.parent.mkdir(parents=True, exist_ok=True)
         path.write_bytes(base64.b64decode(result["data"]))
         return path
+
+    async def page_screenshot(self, profile: str = "default") -> Path:
+        temp_path = Path(f"/tmp/bobthebot-page-{profile}.png")
+        return await self.screenshot(temp_path)

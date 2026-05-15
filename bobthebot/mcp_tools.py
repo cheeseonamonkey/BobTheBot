@@ -31,9 +31,10 @@ def schema(properties: Json | None = None, required: list[str] | None = None) ->
 
 
 def build_tools(server: Any) -> dict[str, Tool]:
-    task_names = server.app.engine.task_registry.names() if hasattr(server, "app") and hasattr(server.app, "engine") else ["idle", "mining"]
+    task_names = server.app.engine.task_registry.names()
+    backend_names = list(server.app.backends.names())
 
-    backend_schema = {"backend": {"type": "string", "enum": ["null", "x11-cv", "dreambot"]}}
+    backend_schema = {"backend": {"type": "string", "enum": backend_names}}
     task_schema = {
         "task": {"type": "string", "enum": task_names},
         "target_name": {"type": "string"},
@@ -82,11 +83,11 @@ def build_tools(server: Any) -> dict[str, Tool]:
         Tool("bob_start_runtime", "Start Xvfb and RuneLite.", schema(), server._start_runtime),
         Tool("bob_stop_runtime", "Stop managed runtime processes and bot engine.", schema(), server._stop_runtime),
         Tool("bob_set_backend", "Select backend: null, x11-cv, or dreambot.", schema(backend_schema, ["backend"]), server._set_backend),
-        Tool("bob_backend_set", "Alias for bob_set_backend.", schema(backend_schema, ["backend"]), server._set_backend),
-        Tool("bob_observe", "Observe current game/client state through the selected backend.", schema(), lambda args: server.app.engine.observe()),
-        Tool("bob_player", "Return semantic player state when supported by the selected backend.", schema(), lambda args: server._with_capability("player", lambda: server._compact_backend_value(server.app.engine.backend.player()))),
-        Tool("bob_inventory", "Return semantic inventory state when supported by the selected backend.", schema(), lambda args: server._with_capability("inventory", lambda: server._compact_backend_value(server.app.engine.backend.inventory()))),
-        Tool("bob_skills", "Return semantic skill state when supported by the selected backend.", schema(), lambda args: server._with_capability("skills", lambda: server._compact_backend_value(server.app.engine.backend.skills()))),
+        Tool("bob_observe", "Observe current game/client state through the selected backend.", schema(), server._observe),
+        Tool("bob_view", "Capture and view auth browser screenshot.", schema(profile_schema), server._view),
+        Tool("bob_player", "Return semantic player state when supported by the selected backend.", schema(), server._player),
+        Tool("bob_inventory", "Return semantic inventory state when supported by the selected backend.", schema(), server._inventory),
+        Tool("bob_skills", "Return semantic skill state when supported by the selected backend.", schema(), server._skills),
         Tool("bob_nearby", "List nearby NPCs, objects, or ground items through a semantic backend.", schema(nearby_schema, ["kind"]), server._nearby),
         Tool("bob_task_list", "List available bot tasks and their configurable parameters.", schema(), lambda args: {"tasks": server.app.engine.tasks()}),
         Tool("bob_task_schema", "Return the config schema for a task.", schema({"task": {"type": "string", "enum": task_names}}, ["task"]), server._task_schema),
@@ -95,7 +96,6 @@ def build_tools(server: Any) -> dict[str, Tool]:
         Tool("bob_engine_pause", "Pause task execution without stopping the engine thread.", schema(), server._engine_pause),
         Tool("bob_engine_resume", "Resume a paused engine thread.", schema(), server._engine_resume),
         Tool("bob_set_task", "Set active task. Optional fields configure task behavior.", task_schema_generator(), server._set_task),
-        Tool("bob_task_set", "Alias for bob_set_task.", task_schema_generator(), server._set_task),
         Tool("bob_interact", "Interact with a semantic target through the selected backend.", schema(entity_schema, ["kind"]), server._interact),
         Tool("bob_click", "Click screen coordinates through the selected backend.", schema({"x": {"type": "integer", "minimum": 0}, "y": {"type": "integer", "minimum": 0}, "button": {"type": "integer", "default": 1, "enum": [1, 2, 3]}}, ["x", "y"]), server._click),
         Tool("bob_type_text", "Type text through the selected backend.", schema({"text": {"type": "string", "minLength": 1}}, ["text"]), server._type_text),
