@@ -58,17 +58,13 @@ def main() -> None:
 
 def run_command(app: BotApp, args: argparse.Namespace, parser: argparse.ArgumentParser) -> dict[str, Any]:
     if args.command == "start":
-        app.processes.start_xvfb()
-        app.processes.start_runelite()
-        return app.status()
+        return app.start_runtime()
     if args.command == "stop":
-        app.engine.stop()
-        app.processes.stop_all()
-        return app.status()
+        return app.stop_runtime()
     if args.command == "backends":
         return app.list_backends()
     if args.command == "tasks":
-        return {"tasks": app.engine.tasks()}
+        return {"tasks": app.list_tasks()}
     if args.command == "tools":
         return list_tools(app)
     if args.command == "tool":
@@ -78,12 +74,12 @@ def run_command(app: BotApp, args: argparse.Namespace, parser: argparse.Argument
     if args.command == "demo-view":
         return demo_view(app)
     if args.command == "auth-status":
-        return app.auth.status(args.profile)
+        return app.auth_status(args.profile)
     if args.command == "auth-view":
-        return app.auth.screenshot(args.profile)
+        return app.auth_screenshot(args.profile)
     if args.command == "observe":
         while True:
-            result = app.engine.observe()
+            result = app.observe()
             if args.watch:
                 maybe_render(result, args.renderer, args.view_size)
                 print(json.dumps(result, indent=2))
@@ -171,7 +167,8 @@ def write_demo_png(path: Path, width: int = 96, height: int = 48) -> Path:
 
     def chunk(tag: bytes, data: bytes) -> bytes:
         c = tag + data
-        return struct.pack(">I", len(data)) + c + struct.pack(">I", zlib.crc32(c) & 0xFFFFFFFF)
+        import struct as _struct
+        return _struct.pack(">I", len(data)) + c + _struct.pack(">I", zlib.crc32(c) & 0xFFFFFFFF)
 
     png = (
         b"\x89PNG\r\n\x1a\n"
@@ -214,7 +211,6 @@ def unwrap_tool_response(response: dict[str, Any]) -> dict[str, Any]:
     return response
 
 
-
 def call_mcp_tool(app: BotApp, tool_name: str, tool_args: dict[str, Any]) -> dict[str, Any]:
     response = BobMcpServer(app).handle(
         {
@@ -242,14 +238,13 @@ def run_script(app: BotApp, args: argparse.Namespace, parser: argparse.ArgumentP
     if not path.exists():
         print(f"Script not found: {path}", file=sys.stderr)
         return {"ok": False, "error": "file not found"}
-    
+
     with open(path) as f:
         code = f.read()
-    
+
     ctx = {"app": app, "BotApp": BotApp, "render": lambda p: render_image(Path(p), args.renderer, args.view_size)}
     exec(code, ctx)
     return {"ok": True}
-
 
 
 def iter_render_payloads(result: dict[str, Any]):

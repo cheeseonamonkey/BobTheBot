@@ -66,7 +66,7 @@ def test_unknown_tool_is_marked_error():
 
 
 def test_tool_can_return_non_object_payload():
-    from bobthebot.mcp_tools import Tool, schema
+    from bobthebot.tools import Tool, schema
 
     server = BobMcpServer()
     server.tools["list_payload"] = Tool("list_payload", "Return a list payload.", schema(), lambda args: ["ok"])
@@ -78,7 +78,7 @@ def test_tool_can_return_non_object_payload():
 
 
 def test_tool_non_json_payload_returns_tool_error():
-    from bobthebot.mcp_tools import Tool, schema
+    from bobthebot.tools import Tool, schema
 
     server = BobMcpServer()
     server.tools["bad_payload"] = Tool("bad_payload", "Return bad payload.", schema(), lambda args: {"bad": object()})
@@ -90,7 +90,7 @@ def test_tool_non_json_payload_returns_tool_error():
 
 
 def test_tool_nan_payload_returns_tool_error():
-    from bobthebot.mcp_tools import Tool, schema
+    from bobthebot.tools import Tool, schema
 
     server = BobMcpServer()
     server.tools["nan_payload"] = Tool("nan_payload", "Return NaN payload.", schema(), lambda args: {"bad": float("nan")})

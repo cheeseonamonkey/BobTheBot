@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from typing import Any, Protocol
 
-from ..models import ActionResult, EntityRef, InventoryState, Observation, PlayerState, RuntimeStatus, SkillsState
+from ..core.models import ActionResult, EntityRef, InventoryState, Observation, PlayerState, RuntimeStatus, SkillsState
 
 
 class BotBackend(Protocol):
