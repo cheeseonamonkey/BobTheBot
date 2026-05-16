@@ -30,6 +30,8 @@ bobthebot-run observe         # snapshot current game state
 bobthebot-run observe --watch 2   # live refresh every 2 s
 ```
 
+For the repeatable isolated Bolt/RuneLite flow we used, see [docs/isolated-bolt-runelite-demo.md](/home/alexander/Proj/BobTheBot/docs/isolated-bolt-runelite-demo.md).
+
 ## Backends
 
 | Name | Description |
