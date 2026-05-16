@@ -32,18 +32,46 @@ COMMANDS = (
 def main() -> None:
     parser = argparse.ArgumentParser(
         prog="bobthebot-run",
-        description="BobTheBot CLI — control the bot engine, MCP tools, and auth browser.",
+        description="Run and inspect BobTheBot without memorizing MCP tool names.",
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+        epilog="""Most useful commands:
+  bobthebot-run check                 check paths and installed programs
+  bobthebot-run see                   look at current bot/game state
+  bobthebot-run run                   start Xvfb + RuneLite
+  bobthebot-run quit                  stop managed processes
+  bobthebot-run task                  list tasks
+  bobthebot-run task mining           set task to mining
+  bobthebot-run auth status           check browser login state
+  bobthebot-run auth view             screenshot the auth browser
+  bobthebot-run tools                 list raw MCP tools
+
+Raw MCP escape hatch:
+  bobthebot-run tool bob_status
+  bobthebot-run tool bob_set_task task=mining
+""",
     )
-    parser.add_argument("command", choices=COMMANDS, metavar="COMMAND")
-    parser.add_argument("target", nargs="?", help="Tool name for 'tool', script path for 'script', or file path for 'view'.")
-    parser.add_argument("kv_args", nargs="*", metavar="KEY=VALUE", help="key=value arguments for the 'tool' command.")
-    parser.add_argument("--backend", default="null", choices=["null", "x11-cv", "dreambot"])
-    parser.add_argument("--args", default="{}", help="JSON object arguments for the 'tool' command.")
-    parser.add_argument("--profile", default="default", help="Auth profile for auth-status/auth-view.")
-    parser.add_argument("--renderer", default="auto", choices=["auto", "chafa", "none"], help="Terminal image renderer.")
-    parser.add_argument("--view-size", default="100x40", help="Terminal render size, passed to chafa as WIDTHxHEIGHT.")
-    parser.add_argument("--watch", type=float, metavar="SECONDS", help="Loop observe every N seconds (live monitor mode).")
+    parser.add_argument("command", nargs="?", metavar="COMMAND", help="Try: check, see, run, quit, task, auth, tools.")
+    parser.add_argument("target", nargs="?", help="Thing to act on. Examples: task name, auth action, tool name, image path.")
+    parser.add_argument("kv_args", nargs="*", metavar="KEY=VALUE", help="Optional settings, like target_name=rock or email=a@b.test.")
+    parser.add_argument("-b", "--backend", default="null", choices=["null", "x11-cv", "dreambot"], help="Runtime backend. Default: null.")
+    parser.add_argument("--args", default="{}", help="JSON object arguments for raw 'tool' calls.")
+    parser.add_argument("-p", "--profile", default="default", help="Auth profile name. Default: default.")
+    parser.add_argument("-r", "--renderer", default="auto", choices=["auto", "chafa", "none"], help="Image renderer. Default: auto.")
+    parser.add_argument("--no-render", action="store_true", help="Do not draw screenshots in the terminal.")
+    parser.add_argument("--view-size", default="100x40", metavar="WIDTHxHEIGHT", help="Terminal image size. Default: 100x40.")
+    parser.add_argument("--watch", type=float, metavar="SECONDS", help="Repeat 'see'/'observe' every N seconds.")
+    parser.add_argument("--live", nargs="?", const=2.0, type=float, metavar="SECONDS", help="Same as --watch, defaulting to 2 seconds.")
     args = parser.parse_args()
+    if not args.command:
+        parser.print_help()
+        return
+    allowed = set(COMMANDS) | {"run", "quit", "backend", "task", "check", "demo", "auth", "see"}
+    if args.command not in allowed:
+        parser.error(f"unknown command: {args.command}. Try 'bobthebot-run -h'.")
+    if args.no_render:
+        args.renderer = "none"
+    if args.live is not None:
+        args.watch = args.live
 
     app = BotApp(backend_name=args.backend)
     result = run_command(app, args, parser)
