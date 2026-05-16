@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from abc import ABC, abstractmethod
 from collections.abc import Callable
 from dataclasses import dataclass
 from typing import Any, TYPE_CHECKING
@@ -32,7 +33,7 @@ def schema(properties: Json | None = None, required: list[str] | None = None) ->
     return result
 
 
-class ToolGroup:
+class ToolGroup(ABC):
     """Base class for a self-contained group of MCP tools.
 
     Subclass, decorate with @register, implement tools().
@@ -43,6 +44,7 @@ class ToolGroup:
     def __init__(self, app: BotApp) -> None:
         self.app = app
 
+    @abstractmethod
     def tools(self) -> list[Tool]:
         raise NotImplementedError
 

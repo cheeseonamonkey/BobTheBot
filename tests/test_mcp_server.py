@@ -256,40 +256,6 @@ def test_null_semantic_tools_return_safe_payloads():
     assert "does not support nearby_entities" in nearby["error"]
 
 
-def test_dreambot_semantic_tools_parse_state(monkeypatch):
-    responses = {
-        "/api/status": {"status": "running", "loggedIn": True},
-        "/api/player": {
-            "name": "Bob",
-            "tile": {"x": 1, "y": 2, "z": 0},
-            "health": 99,
-            "animation": 1,
-            "isMoving": False,
-            "isAnimating": True,
-        },
-        "/api/inventory": {"count": 1, "items": [{"name": "Bronze pickaxe", "id": 1265, "amount": 1, "slot": 0}]},
-        "/api/skills": {"mining": {"level": 3, "xp": 250, "boosted": 3}},
-        "/api/objects": {"count": 1, "objects": [{"name": "Copper rocks"}]},
-    }
-
-    def fake_urlopen(url, timeout):
-        return FakeResponseCtx.json(responses[urlparse(url).path])
-
-    monkeypatch.setattr("urllib.request.urlopen", fake_urlopen)
-    server = BobMcpServer()
-    call(server, "tools/call", {"name": "bob_set_backend", "arguments": {"backend": "dreambot"}})
-
-    player = tool_payload(call(server, "tools/call", {"name": "bob_player", "arguments": {}}))
-    inventory = tool_payload(call(server, "tools/call", {"name": "bob_inventory", "arguments": {}}))
-    skills = tool_payload(call(server, "tools/call", {"name": "bob_skills", "arguments": {}}))
-    nearby = tool_payload(call(server, "tools/call", {"name": "bob_nearby", "arguments": {"kind": "object"}}))
-
-    assert player["name"] == "Bob"
-    assert inventory["items"][0]["item_id"] == 1265
-    assert skills["mining"]["level"] == 3
-    assert nearby["objects"][0]["name"] == "Copper rocks"
-
-
 def test_runtime_management_tools(monkeypatch):
     server = BobMcpServer()
     calls = []
@@ -323,7 +289,7 @@ def test_runtime_management_tools(monkeypatch):
 
 def test_interaction_tools(monkeypatch):
     server = BobMcpServer()
-    call(server, "tools/call", {"name": "bob_backend_set", "arguments": {"backend": "dreambot"}})
+    call(server, "tools/call", {"name": "bob_backend_set", "arguments": {"backend": "null"}})
 
     calls = []
 

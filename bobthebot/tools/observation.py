@@ -1,8 +1,8 @@
 from __future__ import annotations
 
 from ._base import ToolGroup, Tool, register, schema
+from .auth import _profile
 
-_profile = {"profile": {"type": "string", "default": "default", "minLength": 1}}
 _nearby = {
     "kind": {"type": "string", "enum": ["npc", "object", "grounditem"]},
     "name": {"type": "string"},

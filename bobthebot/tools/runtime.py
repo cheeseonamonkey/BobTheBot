@@ -2,9 +2,6 @@ from __future__ import annotations
 
 from ._base import ToolGroup, Tool, register, schema
 
-_backend_schema_props = {"backend": {"type": "string"}}
-
-
 @register
 class RuntimeTools(ToolGroup):
     def tools(self) -> list[Tool]:
@@ -32,7 +29,7 @@ class RuntimeTools(ToolGroup):
                  schema(),
                  lambda args: self.app.stop_runtime()),
             Tool("bob_set_backend",
-                 "Select backend: null, x11-cv, or dreambot.",
+                 "Select backend: null or x11-cv.",
                  schema(backend_enum, ["backend"]),
                  lambda args: self.app.set_backend(str(args["backend"]))),
         ]

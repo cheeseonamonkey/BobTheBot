@@ -1,5 +1,4 @@
 # Backward-compat shim — canonical source is bobthebot.core.models
-from .core.models import *  # noqa: F401, F403
 from .core.models import (
     ActionResult, EntityRef, InventoryItem, InventoryState, Observation,
     PlayerState, RuntimeStatus, ScreenPoint, SkillState, SkillsState,

@@ -32,15 +32,18 @@ class ProcessSupervisor:
     def _start(self, name: str, cmd: list[str], env: dict[str, str] | None = None) -> bool:
         if self.is_running(name):
             return True
-        proc = subprocess.Popen(
-            cmd,
-            env=env,
-            stdout=subprocess.DEVNULL,
-            stderr=subprocess.DEVNULL,
-            start_new_session=True,
-        )
-        self._pid_file(name).write_text(str(proc.pid))
-        return True
+        try:
+            proc = subprocess.Popen(
+                cmd,
+                env=env,
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+                start_new_session=True,
+            )
+            self._pid_file(name).write_text(str(proc.pid))
+            return True
+        except (OSError, FileNotFoundError):
+            return False
 
     def start_xvfb(self) -> bool:
         cmd = [

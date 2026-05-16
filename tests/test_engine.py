@@ -1,8 +1,8 @@
 from bobthebot.backends.base import NullBackend
 from bobthebot.config import BotConfig
-from bobthebot.engine import BotEngine
-from bobthebot.models import ActionResult, EntityRef, Observation, RuntimeStatus
-from bobthebot.tasks import Task
+from bobthebot.core.engine import BotEngine
+from bobthebot.core.models import ActionResult, EntityRef, Observation, RuntimeStatus
+from bobthebot.core.tasks import Task
 
 
 def test_engine_status_defaults_to_idle(tmp_path):

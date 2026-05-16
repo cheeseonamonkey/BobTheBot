@@ -94,7 +94,8 @@ class BobMcpServer:
     def _result(self, message: Json, result: Json) -> Json:
         return {"jsonrpc": "2.0", "id": message.get("id"), "result": result}
 
-    def _parse_error(self, text: str) -> Json:
+    @staticmethod
+    def _parse_error(text: str) -> Json:
         return {"jsonrpc": "2.0", "id": None, "error": {"code": -32700, "message": text}}
 
     def _tool_call_args(self, message: Json) -> tuple[str | None, Json | None]:

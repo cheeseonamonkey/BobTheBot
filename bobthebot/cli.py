@@ -3,9 +3,11 @@ from __future__ import annotations
 import argparse
 import json
 import shutil
+import struct
 import subprocess
 import sys
 import time
+import zlib
 from pathlib import Path
 from typing import Any
 
@@ -28,6 +30,8 @@ COMMANDS = (
     "script",
     "view",
 )
+
+ALIASES = {"run": "start", "quit": "stop", "backend": "backends", "task": "tasks", "check": "doctor", "demo": "demo-view", "auth": "auth-status", "see": "observe"}
 
 def main() -> None:
     parser = argparse.ArgumentParser(
@@ -53,7 +57,7 @@ Raw MCP escape hatch:
     parser.add_argument("command", nargs="?", metavar="COMMAND", help="Try: check, see, run, quit, task, auth, tools.")
     parser.add_argument("target", nargs="?", help="Thing to act on. Examples: task name, auth action, tool name, image path.")
     parser.add_argument("kv_args", nargs="*", metavar="KEY=VALUE", help="Optional settings, like target_name=rock or email=a@b.test.")
-    parser.add_argument("-b", "--backend", default="null", choices=["null", "x11-cv", "dreambot"], help="Runtime backend. Default: null.")
+    parser.add_argument("-b", "--backend", default="null", choices=["null", "x11-cv"], help="Runtime backend. Default: null.")
     parser.add_argument("--args", default="{}", help="JSON object arguments for raw 'tool' calls.")
     parser.add_argument("-p", "--profile", default="default", help="Auth profile name. Default: default.")
     parser.add_argument("-r", "--renderer", default="auto", choices=["auto", "chafa", "none"], help="Image renderer. Default: auto.")
@@ -65,8 +69,10 @@ Raw MCP escape hatch:
     if not args.command:
         parser.print_help()
         return
-    allowed = set(COMMANDS) | {"run", "quit", "backend", "task", "check", "demo", "auth", "see"}
-    if args.command not in allowed:
+    # Resolve aliases to canonical command
+    if args.command in ALIASES:
+        args.command = ALIASES[args.command]
+    if args.command not in COMMANDS:
         parser.error(f"unknown command: {args.command}. Try 'bobthebot-run -h'.")
     if args.no_render:
         args.renderer = "none"
@@ -177,9 +183,6 @@ def demo_view(app: BotApp) -> dict[str, Any]:
 
 
 def write_demo_png(path: Path, width: int = 96, height: int = 48) -> Path:
-    import struct
-    import zlib
-
     path.parent.mkdir(parents=True, exist_ok=True)
     rows = []
     for y in range(height):
@@ -195,8 +198,7 @@ def write_demo_png(path: Path, width: int = 96, height: int = 48) -> Path:
 
     def chunk(tag: bytes, data: bytes) -> bytes:
         c = tag + data
-        import struct as _struct
-        return _struct.pack(">I", len(data)) + c + _struct.pack(">I", zlib.crc32(c) & 0xFFFFFFFF)
+        return struct.pack(">I", len(data)) + c + struct.pack(">I", zlib.crc32(c) & 0xFFFFFFFF)
 
     png = (
         b"\x89PNG\r\n\x1a\n"

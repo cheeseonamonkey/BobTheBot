@@ -30,7 +30,7 @@ bobthebot-run observe         # snapshot current game state
 bobthebot-run observe --watch 2   # live refresh every 2 s
 ```
 
-For the repeatable isolated Bolt/RuneLite flow we used, see [docs/isolated-bolt-runelite-demo.md](/home/alexander/Proj/BobTheBot/docs/isolated-bolt-runelite-demo.md).
+For the repeatable isolated Bolt/RuneLite flow we used, see [docs/isolated-bolt-runelite-demo.md](docs/isolated-bolt-runelite-demo.md).
 
 ## Backends
 
@@ -38,7 +38,6 @@ For the repeatable isolated Bolt/RuneLite flow we used, see [docs/isolated-bolt-
 |------|-------------|
 | `null` | Safe no-game backend for testing (default) |
 | `x11-cv` | X11 screenshot + raw input (requires `[cv]`) |
-| `dreambot` | Semantic API via local DreamBot HTTP bridge |
 
 Select with `--backend NAME` on any command.
 
@@ -73,7 +72,7 @@ Commands:
   doctor           Check dependencies and paths
 
 Options:
-  --backend        null | x11-cv | dreambot  (default: null)
+  --backend        null | x11-cv  (default: null)
   --renderer       auto | chafa | none
   --view-size      WIDTHxHEIGHT for chafa  (default: 100x40)
   --watch SECS     Live-loop interval for observe

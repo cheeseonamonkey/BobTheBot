@@ -4,6 +4,8 @@ from dataclasses import asdict, dataclass, field
 from typing import Any
 
 
+import math
+
 def safe_int(value: Any, default: int = 0) -> int:
     try:
         if value is None or isinstance(value, bool):
@@ -58,7 +60,7 @@ def _validate_integer(label: str, key: str, value: Any) -> None:
 def _validate_number(label: str, key: str, value: Any, prop: dict[str, Any]) -> None:
     if not isinstance(value, int | float) or isinstance(value, bool):
         raise ValueError(f"{label}: {key} must be a number")
-    if value != value or value in (float("inf"), float("-inf")):
+    if math.isnan(value) if isinstance(value, float) else False or value in (float("inf"), float("-inf")):
         raise ValueError(f"{label}: {key} must be finite")
 
 
@@ -75,6 +77,7 @@ def _validate_numeric_bounds(label: str, key: str, value: int | float, prop: dic
 
 
 def compact_dict(value: Any) -> Any:
+    # Filters None values when building dict representation, keeps valid numeric data like 0.
     if hasattr(value, "to_dict"):
         return value.to_dict()
     if isinstance(value, list):
@@ -146,17 +149,6 @@ class PlayerState:
     is_moving: bool | None = None
     is_animating: bool | None = None
 
-    @classmethod
-    def from_dreambot(cls, data: dict[str, Any]) -> PlayerState:
-        return cls(
-            name=data.get("name"),
-            tile=data.get("tile"),
-            health=data.get("health"),
-            animation=data.get("animation"),
-            is_moving=data.get("isMoving"),
-            is_animating=data.get("isAnimating"),
-        )
-
     def to_dict(self) -> dict[str, Any]:
         return compact_dict(asdict(self))
 
@@ -168,15 +160,6 @@ class InventoryItem:
     amount: int = 1
     slot: int | None = None
 
-    @classmethod
-    def from_dreambot(cls, data: dict[str, Any]) -> InventoryItem:
-        return cls(
-            name=str(data.get("name", "")),
-            item_id=safe_int(data.get("id"), -1),
-            amount=safe_int(data.get("amount"), 1),
-            slot=None if data.get("slot") is None else safe_int(data.get("slot"), -1),
-        )
-
     def to_dict(self) -> dict[str, Any]:
         return compact_dict(asdict(self))
 
@@ -184,10 +167,6 @@ class InventoryItem:
 @dataclass(frozen=True)
 class InventoryState:
     items: list[InventoryItem] = field(default_factory=list)
-
-    @classmethod
-    def from_dreambot(cls, data: dict[str, Any]) -> InventoryState:
-        return cls(items=[InventoryItem.from_dreambot(item) for item in data.get("items", [])])
 
     @property
     def count(self) -> int:
@@ -204,15 +183,6 @@ class SkillState:
     xp: int
     boosted: int | None = None
 
-    @classmethod
-    def from_dreambot(cls, name: str, data: dict[str, Any]) -> SkillState:
-        return cls(
-            name=name,
-            level=safe_int(data.get("level"), 0),
-            xp=safe_int(data.get("xp"), 0),
-            boosted=None if data.get("boosted") is None else safe_int(data.get("boosted"), 0),
-        )
-
     def to_dict(self) -> dict[str, Any]:
         return compact_dict(asdict(self))
 
@@ -220,16 +190,6 @@ class SkillState:
 @dataclass(frozen=True)
 class SkillsState:
     skills: dict[str, SkillState] = field(default_factory=dict)
-
-    @classmethod
-    def from_dreambot(cls, data: dict[str, Any]) -> SkillsState:
-        return cls(
-            skills={
-                name: SkillState.from_dreambot(name, value)
-                for name, value in data.items()
-                if isinstance(value, dict)
-            }
-        )
 
     def to_dict(self) -> dict[str, Any]:
         return {name: skill.to_dict() for name, skill in self.skills.items()}

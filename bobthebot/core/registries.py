@@ -5,7 +5,7 @@ from typing import Callable
 
 from ..backends.base import BotBackend, NullBackend
 from ..backends.cv import X11CvBackend
-from ..backends.dreambot import DreamBotBridgeBackend
+
 from ..config import BotConfig
 
 
@@ -64,12 +64,5 @@ def default_backend_registry() -> BackendRegistry:
             factory=lambda config: X11CvBackend(config),
         )
     )
-    registry.register(
-        BackendSpec(
-            name="dreambot",
-            description="Semantic OSRS backend using the local DreamBot HTTP bridge.",
-            capabilities=DreamBotBridgeBackend.capabilities,
-            factory=lambda config: DreamBotBridgeBackend(config.dreambot_url),
-        )
-    )
+
     return registry

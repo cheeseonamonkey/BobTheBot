@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from ..models import EntityRef
+from ..core.models import EntityRef
 from ._base import ToolGroup, Tool, register, schema
 
 _entity = {

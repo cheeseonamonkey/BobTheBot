@@ -13,7 +13,6 @@ class BotConfig:
     height: int = 600
     depth: int = 24
     tick_rate: float = 0.5
-    dreambot_url: str = "http://127.0.0.1:19132"
     browser_executable: str | None = None
     browser_debug_port: int = 9222
     jagex_register_url: str = "https://account.jagex.com/en-GB/sign-up"
@@ -68,7 +67,6 @@ def default_config() -> BotConfig:
         height=int(os.getenv("BOBTHEBOT_HEIGHT", "600")),
         depth=int(os.getenv("BOBTHEBOT_DEPTH", "24")),
         tick_rate=float(os.getenv("BOBTHEBOT_TICK_RATE", "0.5")),
-        dreambot_url=os.getenv("BOBTHEBOT_DREAMBOT_URL", "http://127.0.0.1:19132"),
         browser_executable=os.getenv("BOBTHEBOT_BROWSER"),
         browser_debug_port=int(os.getenv("BOBTHEBOT_BROWSER_PORT", "9222")),
         jagex_register_url=os.getenv("BOBTHEBOT_JAGEX_REGISTER_URL", "https://account.jagex.com/en-GB/sign-up"),

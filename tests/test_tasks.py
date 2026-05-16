@@ -1,4 +1,4 @@
-from bobthebot.tasks import InteractTask, MiningTask, default_task_registry
+from bobthebot.core.tasks import InteractTask, MiningTask, default_task_registry
 
 
 def test_task_registry_describes_schema():

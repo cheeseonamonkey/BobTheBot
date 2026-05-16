@@ -5,7 +5,7 @@ import random
 import subprocess
 import time
 from pathlib import Path
-from ..models import ActionResult, EntityRef, InventoryState, Observation, RuntimeStatus, SkillsState
+from ..core.models import ActionResult, EntityRef, InventoryState, Observation, RuntimeStatus, SkillsState
 from ..config import BotConfig
 
 
