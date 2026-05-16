@@ -25,12 +25,24 @@ PASSWORD_SELECTORS = ['input[type="password"]', 'input[name="password"]', '#pass
 SUBMIT_SELECTORS = ['button[type="submit"]', 'input[type="submit"]', 'button[data-testid*="submit"]']
 DISPLAY_NAME_SELECTORS = ['input[name="displayName"]', 'input[name="display_name"]', '#displayName']
 AUTH_STATE_RULES = (
-    ("awaiting_captcha", False, "CAPTCHA or security check detected.", ["captcha"], ("captcha", "verify you are human", "security check")),
+    ("awaiting_cloudflare", False, "Cloudflare challenge detected.", ["captcha"], ("just a moment", "checking your browser", "enable javascript and cookies", "cf-challenge-running")),
+    ("awaiting_captcha", False, "CAPTCHA or security check detected.", ["captcha"], ("captcha", "turnstile", "verify you are human", "security check", "cloudflare")),
     ("awaiting_email_code", False, "Email verification code required.", ["email_code"], ("verification code", "email code", "check your email", "enter the code")),
     ("awaiting_2fa", False, "Two-factor code required.", ["two_factor_code"], ("authenticator", "two-factor", "two factor", "2fa")),
     ("blocked", False, "Registration/login appears blocked or rate-limited.", None, ("blocked", "too many attempts", "temporarily unavailable")),
     ("logged_in", True, "Account appears authenticated.", None, ("account created", "welcome", "logout", "log out")),
 )
+
+_GUIDE_HINTS: dict[str, tuple[bool, str]] = {
+    "registration_page": (False, "Fill email/password fields, then click the submit button"),
+    "login_page": (False, "Fill email/password fields, then click sign in"),
+    "awaiting_cloudflare": (True, "Ask the user to solve the Cloudflare challenge in the Chrome window, then call bob_auth_guide_step again"),
+    "awaiting_captcha": (True, "Ask the user to solve the CAPTCHA in the Chrome window, then call bob_auth_guide_step again"),
+    "awaiting_email_code": (True, "Ask the user for the email OTP code, then call bob_auth_continue with email_code=<code>"),
+    "awaiting_2fa": (True, "Ask the user for the 2FA code, then call bob_auth_continue with two_factor_code=<code>"),
+    "logged_in": (False, "Authentication complete"),
+    "unknown": (False, "Inspect the screenshot to decide the next action"),
+}
 
 
 @dataclass(frozen=True)
@@ -157,6 +169,61 @@ class AuthService:
         except Exception as exc:
             return {"ok": False, "profile": profile, "error": str(exc)}
 
+    def wait_for_state(self, target_states: list[str], timeout: float = 30.0, poll: float = 1.0) -> dict[str, Any]:
+        deadline = time.time() + timeout
+        last: AuthResult | None = None
+        while time.time() < deadline:
+            try:
+                snapshot = asyncio.run(self.browser.page_snapshot())
+                last = self.detect_state(snapshot)
+                if last.state in target_states:
+                    return {"ok": True, "reached": True, **last.to_dict()}
+            except Exception:
+                pass
+            time.sleep(poll)
+        if last:
+            return {"ok": True, "reached": False, "timed_out": True, **last.to_dict()}
+        return {"ok": False, "reached": False, "timed_out": True, "state": "browser_unavailable"}
+
+    def guide_step(self, profile: str = "default") -> dict[str, Any]:
+        path = self.config.logs_dir / f"auth-{profile}.png"
+        try:
+            async def _collect():
+                snapshot = await self.browser.page_snapshot()
+                buttons = await self.browser.visible_buttons()
+                inputs = await self.browser.visible_inputs()
+                screenshot_path = await self.browser.screenshot(path)
+                return snapshot, buttons, inputs, screenshot_path
+
+            snapshot, buttons, inputs, screenshot_path = asyncio.run(_collect())
+        except Exception as exc:
+            return {"ok": False, "state": "browser_unavailable", "message": str(exc), "needs_user": False}
+
+        detected = self.detect_state(snapshot)
+        needs_user, suggested_action = _GUIDE_HINTS.get(detected.state, (False, "Inspect the screenshot to decide the next action"))
+        return {
+            "ok": detected.ok,
+            "state": detected.state,
+            "message": detected.message,
+            "url": snapshot.get("url"),
+            "screenshot": str(screenshot_path),
+            "visible_buttons": buttons,
+            "visible_inputs": inputs,
+            "needs_user": needs_user,
+            "suggested_action": suggested_action,
+        }
+
+    def click_text(self, text: str) -> dict[str, Any]:
+        try:
+            clicked = asyncio.run(self.browser.click_text(text))
+            return {"ok": clicked, "clicked": clicked, "text": text}
+        except Exception as exc:
+            return {"ok": False, "error": str(exc)}
+
+    def restart_browser(self, url: str | None = None) -> dict[str, Any]:
+        ok = self.processes.restart_browser(url=url, headless=False)
+        return {"ok": ok, "url": url}
+
     def open(self, url: str) -> dict[str, Any]:
         self.processes.start_browser(url)
         snapshot = asyncio.run(self.browser.navigate(url))
@@ -173,7 +240,7 @@ class AuthService:
         creds = self._credentials(profile, kwargs.get("email"), kwargs.get("password"))
         if not creds:
             return AuthResult(False, "missing_credentials", "Provide email/password or save credentials first.")
-        self.processes.start_browser(url)
+        self.processes.start_browser(url, headless=False)
 
         async def _flow() -> dict[str, Any]:
             await self.browser.navigate(url)

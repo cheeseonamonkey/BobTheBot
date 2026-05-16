@@ -97,7 +97,11 @@ class ProcessSupervisor:
                     return resolved
         return None
 
-    def start_browser(self, url: str | None = None, headless: bool = True) -> bool:
+    def restart_browser(self, url: str | None = None, headless: bool = False) -> bool:
+        self.stop_process("browser")
+        return self.start_browser(url=url, headless=headless)
+
+    def start_browser(self, url: str | None = None, headless: bool = False) -> bool:
         browser = self.find_browser()
         if not browser:
             raise RuntimeError("No supported browser found. Set BOBTHEBOT_BROWSER or install google-chrome/chromium.")

@@ -11,7 +11,7 @@ class FakeProcesses:
     def __init__(self):
         self.urls = []
 
-    def start_browser(self, url=None):
+    def start_browser(self, url=None, headless=False):
         self.urls.append(url)
         return True
 

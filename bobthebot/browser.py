@@ -145,6 +145,39 @@ class BrowserController:
         }})()"""
         return bool(await self.evaluate(expression))
 
+    async def click_text(self, text: str) -> bool:
+        t = json.dumps(text.lower())
+        expression = f"""(() => {{
+          const needle = {t};
+          const els = Array.from(document.querySelectorAll('button,a,[role="button"],input[type="submit"]'));
+          const match = els.find(el => el.innerText && el.innerText.toLowerCase().includes(needle));
+          if (!match) return false;
+          match.click();
+          return true;
+        }})()"""
+        return bool(await self.evaluate(expression))
+
+    async def visible_buttons(self) -> list[str]:
+        expression = """(() => {
+          const els = Array.from(document.querySelectorAll('button,input[type="submit"],[role="button"]'));
+          return els.map(el => (el.innerText || el.value || '').trim()).filter(t => t.length > 0);
+        })()"""
+        result = await self.evaluate(expression)
+        return result if isinstance(result, list) else []
+
+    async def visible_inputs(self) -> list[dict]:
+        expression = """(() => {
+          const els = Array.from(document.querySelectorAll('input:not([type="hidden"]),textarea'));
+          return els.map(el => ({
+            type: el.type || 'text',
+            name: el.name || '',
+            placeholder: el.placeholder || '',
+            id: el.id || ''
+          }));
+        })()"""
+        result = await self.evaluate(expression)
+        return result if isinstance(result, list) else []
+
     async def screenshot(self, path: Path) -> Path:
         async with CdpClient(self.wait_for_websocket_url()) as cdp:
             result = await cdp.send("Page.captureScreenshot", {"format": "png", "captureBeyondViewport": True})

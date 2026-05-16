@@ -64,7 +64,7 @@ Raw MCP escape hatch:
     parser.add_argument("--no-render", action="store_true", help="Do not draw screenshots in the terminal.")
     parser.add_argument("--view-size", default="100x40", metavar="WIDTHxHEIGHT", help="Terminal image size. Default: 100x40.")
     parser.add_argument("--watch", type=float, metavar="SECONDS", help="Repeat 'see'/'observe' every N seconds.")
-    parser.add_argument("--live", nargs="?", const=2.0, type=float, metavar="SECONDS", help="Same as --watch, defaulting to 2 seconds.")
+    parser.add_argument("--live", nargs="?", const=1.0, type=float, metavar="SECONDS", help="Same as --watch, defaulting to 2 seconds.")
     args = parser.parse_args()
     if not args.command:
         parser.print_help()

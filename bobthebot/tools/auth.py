@@ -43,11 +43,11 @@ class AuthTools(ToolGroup):
                  schema(_profile),
                  lambda args: self.app.auth_status(str(args.get("profile", "default")))),
             Tool("bob_auth_register_start",
-                 "Start or continue automated Jagex registration.",
+                 "Start automated Jagex registration (opens visible Chrome).",
                  schema(_auth_start),
                  lambda args: self.app.auth_register_start(**self._start_args(args))),
             Tool("bob_auth_login_start",
-                 "Start or continue automated Jagex login.",
+                 "Start automated Jagex login (opens visible Chrome).",
                  schema(_auth_start),
                  lambda args: self.app.auth_login_start(**self._start_args(args))),
             Tool("bob_auth_continue",
@@ -59,7 +59,7 @@ class AuthTools(ToolGroup):
                  schema(_profile),
                  lambda args: self.app.auth_screenshot(str(args.get("profile", "default")))),
             Tool("bob_auth_open",
-                 "Open an arbitrary auth/browser URL.",
+                 "Open an arbitrary URL in the auth browser.",
                  schema({"url": {"type": "string", "minLength": 1}}, ["url"]),
                  lambda args: self.app.auth_open(str(args["url"]))),
             Tool("bob_auth_verification_check",
@@ -69,6 +69,26 @@ class AuthTools(ToolGroup):
                      profile=str(args.get("profile", "default")),
                      purpose=str(args.get("purpose", "auth")),
                  )),
+            Tool("bob_auth_guide_step",
+                 "Screenshot + state analysis. Returns what is on screen, visible buttons/inputs, needs_user flag, and suggested_action. Primary tool for driving the auth loop.",
+                 schema(_profile),
+                 lambda args: self.app.auth_guide_step(str(args.get("profile", "default")))),
+            Tool("bob_auth_wait",
+                 "Poll the browser until one of the target states is reached or timeout expires.",
+                 schema({
+                     "profile": {"type": "string", "default": "default", "minLength": 1},
+                     "target_states": {"type": "array", "items": {"type": "string"}, "minItems": 1},
+                     "timeout": {"type": "number", "default": 30.0, "minimum": 1.0, "maximum": 300.0},
+                 }, ["target_states"]),
+                 self._wait),
+            Tool("bob_auth_click_text",
+                 "Click the first button or link whose visible text contains the given string.",
+                 schema({"text": {"type": "string", "minLength": 1}}, ["text"]),
+                 lambda args: self.app.auth_click_text(str(args["text"]))),
+            Tool("bob_auth_restart_browser",
+                 "Kill any running browser instance and open a fresh visible Chrome at a URL.",
+                 schema({"url": {"type": "string", "minLength": 1}}),
+                 lambda args: self.app.auth_restart_browser(url=args.get("url"))),
         ]
 
     def _save_credentials(self, args: dict) -> dict:
@@ -97,3 +117,9 @@ class AuthTools(ToolGroup):
             }.items()
             if value is not None
         }
+
+    def _wait(self, args: dict) -> dict:
+        return self.app.auth_wait(
+            target_states=[str(s) for s in args["target_states"]],
+            timeout=float(args.get("timeout", 30.0)),
+        )

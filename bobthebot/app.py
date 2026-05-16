@@ -165,3 +165,15 @@ class BotApp:
 
     def auth_verification_check(self, profile: str = "default", purpose: str = "auth") -> dict[str, Any]:
         return self.auth.verification_check(profile, purpose)
+
+    def auth_guide_step(self, profile: str = "default") -> dict[str, Any]:
+        return self.auth.guide_step(profile)
+
+    def auth_wait(self, target_states: list[str], timeout: float = 30.0) -> dict[str, Any]:
+        return self.auth.wait_for_state(target_states, timeout=timeout)
+
+    def auth_click_text(self, text: str) -> dict[str, Any]:
+        return self.auth.click_text(text)
+
+    def auth_restart_browser(self, url: str | None = None) -> dict[str, Any]:
+        return self.auth.restart_browser(url=url)

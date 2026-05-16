@@ -47,6 +47,6 @@ def test_start_browser_uses_configured_profile_and_debug_port(monkeypatch, tmp_p
     assert f"--remote-debugging-port={cfg.browser_debug_port}" in cmd
     assert f"--user-data-dir={cfg.browser_profile}" in cmd
     assert "--window-size=1024,768" in cmd
-    assert "--headless=new" in cmd
+    assert "--headless=new" not in cmd
     assert cmd[-1] == "https://example.test"
     assert Path(cfg.runtime_dir / "browser.pid").read_text() == "12345"
