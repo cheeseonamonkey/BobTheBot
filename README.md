@@ -2,7 +2,7 @@
 
 **An AI-controlled OSRS bot runtime — developed entirely by AI agents, never by hand.**
 
-The goal: bootstrap a working OSRS bot without a human ever opening the game client manually. An agent does all of it through the MCP server: registration, login, gameplay automation, strategy changes.
+The goal: bootstrap a working OSRS bot primarily through agent control. Agents drive the MCP server, screenshots, clicks, login flow, gameplay automation, and strategy changes; humans only handle explicit security checks such as CAPTCHA/OTP/2FA.
 
 Two things co-evolve:
 - **The bot runtime** — backends, task engine, semi-agentic auth (visible browser + human OTP/CAPTCHA), test fixtures
@@ -22,16 +22,16 @@ pip install -e ".[dev]"                    # core + tests
 
 ### Verify Everything Works
 ```bash
-pytest -q                                  # 68 unit tests (all passing)
-python -m radon cc bobthebot/ -s -a       # Code complexity: A-rated
-python -m pyright bobthebot/               # Type checking: clean
-bobthebot-run status                       # Check runtime state
+.venv/bin/python -m pytest -q
+.venv/bin/python -m radon cc bobthebot/ -s -a  # Code complexity: A-rated
+python -m pyright bobthebot/               # Type checking, if pyright is installed
+.venv/bin/bobthebot-run check              # Check runtime paths/deps
 ```
 
 ### Using the MCP Server (For Claude Agents)
 ```bash
 # Start the JSON-RPC stdio server
-bobthebot-run mcp
+bobthebot-mcp
 
 # From another terminal, call a tool:
 printf '{"jsonrpc":"2.0","id":1,"method":"tools/list","params":{}}\n' | python -m bobthebot.mcp_server
@@ -42,7 +42,7 @@ printf '{"jsonrpc":"2.0","id":2,"method":"tools/call","params":{"name":"bob_auth
 ```bash
 # Process/runtime status
 bobthebot-run status
-bobthebot-run runtime-status
+bobthebot-run check
 
 # List backends, tasks, MCP tools
 bobthebot-run backends
@@ -50,8 +50,8 @@ bobthebot-run tasks
 bobthebot-run tools
 
 # Start runtime (Xvfb + RuneLite)
-bobthebot-run runtime-start
-bobthebot-run runtime-stop
+bobthebot-run start
+bobthebot-run stop
 
 # Take a screenshot (ASCII art, refreshes every 1 second)
 bobthebot-run see --live                   # Press Ctrl-C to exit
@@ -74,10 +74,9 @@ bobthebot-run tool bob_auth_save_credentials --args '{"email":"you@example.com",
 | `auth.py` | Registration/login state machine + semi-agentic guide step (detects CAPTCHA, OTP, signals when human input needed) |
 | `app.py` | Facade composing config, processes, auth, engine |
 | `engine.py` | Threaded bot engine with lifecycle (start/stop/pause/resume) + task selection |
-| `backends/` | Game client adapters (null, x11-cv, dreambot) |
+| `backends/` | Game client adapters (currently `null` and `x11-cv`) |
 | `mcp_server.py` | Hardened JSON-RPC 2.0 stdio dispatcher (validates messages, handles parse errors, rejects NaN/Infinity) |
-| `mcp_tools.py` | Declarative tool registry + schemas |
-| `tools/` | Tool groups (auth, runtime, tasks, input) |
+| `tools/` | Declarative MCP tool groups + schemas (auth, runtime, engine, tasks, observation, input) |
 
 ### Semi-Agentic Auth Flow
 The bot can automate most of registration/login, but **Cloudflare Turnstile blocks headless Chrome**. Solution: open a **visible Chrome window** so the user can:
@@ -94,15 +93,15 @@ The `guide_step` tool returns:
 
 **Example flow**:
 ```
-1. bot_auth_restart_browser url=https://account.jagex.com/en-GB/sign-up
-2. bot_auth_register_start email=... password=... display_name=...
-3. bot_auth_guide_step
+1. bob_auth_restart_browser url=https://account.jagex.com/en-GB/sign-up
+2. bob_auth_register_start email=... password=... display_name=...
+3. bob_auth_guide_step
    → returns: state="awaiting_captcha", needs_user=true, screenshot="path.png"
 4. User solves CAPTCHA in the visible Chrome window
-5. bot_auth_guide_step
+5. bob_auth_guide_step
    → returns: state="awaiting_email_code", needs_user=true
 6. User enters the OTP, bot calls: bob_auth_continue email_code=123456
-7. bot_auth_guide_step
+7. bob_auth_guide_step
    → returns: state="logged_in", needs_user=false
 ```
 
@@ -111,9 +110,9 @@ The `guide_step` tool returns:
 | Category | Count | Examples |
 |----------|-------|----------|
 | **Auth** (12) | Semi-agentic registration/login | `bob_auth_guide_step`, `bob_auth_wait`, `bob_auth_click_text`, `bob_auth_restart_browser`, `bob_auth_register_start`, `bob_auth_login_start`, `bob_auth_continue`, `bob_auth_screenshot` |
-| **Runtime** (10) | Process + engine control | `bob_status`, `bob_runtime_start`, `bob_runtime_stop`, `bob_backend_list`, `bob_backend_set`, `bob_engine_start`, `bob_engine_stop`, `bob_engine_pause`, `bob_engine_resume` |
+| **Runtime** (10) | Process + engine control | `bob_status`, `bob_start_runtime`, `bob_stop_runtime`, `bob_backend_list`, `bob_set_backend`, `bob_engine_start`, `bob_engine_stop`, `bob_engine_pause`, `bob_engine_resume` |
 | **Tasks** (4) | Task selection + observation | `bob_task_list`, `bob_task_schema`, `bob_set_task`, `bob_observe` |
-| **Observation** (4) | Game state snapshots | `bob_player`, `bob_inventory`, `bob_skills`, `bob_nearby` |
+| **Observation** (6) | Screenshots + game state snapshots | `bob_observe`, `bob_view`, `bob_player`, `bob_inventory`, `bob_skills`, `bob_nearby` |
 | **Raw Input** (4) | Direct mouse/keyboard | `bob_click`, `bob_type_text`, `bob_press_key`, `bob_interact` |
 
 For the full list, run `bobthebot-run tools` or call `tools/list` on the MCP server.
@@ -126,9 +125,9 @@ For the full list, run `bobthebot-run tools` or call `tools/list` on the MCP ser
 |------|-------------|----------|--------|
 | `null` | Returns dummy responses | Testing MCP structure, validating tool schemas | ✅ Safe default |
 | `x11-cv` | X11 screenshots + xdotool input | Headless RuneLite on Xvfb (requires `[cv]` deps) | ✅ Works |
-| `dreambot` | HTTP bridge to Java DreamBot script | RuneLite with DreamBot script at localhost:19132 | ⚠️ Optional |
+| `dreambot` | Java HTTP bridge in `Scripts/MCPBridge.java` | Requires DreamBot running the bridge script | ⚠️ Legacy/experimental; not registered as a Python backend |
 
-Select with `--backend NAME` or via `bob_backend_set` tool.
+Select with `--backend NAME` or via the `bob_set_backend` tool.
 
 ---
 
@@ -139,7 +138,7 @@ Select with `--backend NAME` or via `bob_backend_set` tool.
 bobthebot-run tool bob_auth_save_credentials profile=default email=you@example.com password=secret
 ```
 
-Stored (encrypted on disk, chmod 0600) at `~/.config/bobthebot/auth/credentials.json`.
+Stored as plaintext JSON with chmod `0600` at `.runtime/auth/credentials.json`.
 
 ### Email OTP Providers (Priority Order)
 1. **Direct env var**: `export BOBTHEBOT_EMAIL_CODE=123456`
@@ -247,7 +246,7 @@ See `.claude/MEMORY.md` for the full index. Memories are persisted in Claude Cod
 | java | RuneLite (optional) | `apt install default-jre` |
 | Xvfb | Virtual display (optional) | `apt install xvfb` |
 
-Optional CV backend requires: OpenCV, scikit-image, Pillow, numpy.
+Optional CV backend requires: `mss`, `numpy`, and `opencv-python`.
 
 ---
 
@@ -296,6 +295,8 @@ for i in range(max_attempts):
 
 ## Help & Docs
 
+- **Agent ops checklist**: See [docs/agent-ops.md](docs/agent-ops.md)
+- **Project context**: See [docs/project-context.md](docs/project-context.md)
 - **Setup instructions**: See [Local Environment Setup](docs/) in memory
 - **Troubleshooting**: See [Troubleshooting Guide](docs/) in memory
 - **Lessons learned**: See [Lessons Learned & Pitfalls](docs/) in memory
@@ -310,4 +311,4 @@ for i in range(max_attempts):
 
 ---
 
-**Made by AI, for AI.** BobTheBot is designed to be controlled entirely by AI agents through MCP tools. No manual browser interaction, no hardcoded flows, just agent-driven automation.
+**Made by AI, for AI.** BobTheBot is designed to be controlled by AI agents through MCP tools, with explicit human handoff for CAPTCHA/security checks.

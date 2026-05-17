@@ -159,7 +159,7 @@ class BrowserController:
 
     async def visible_buttons(self) -> list[str]:
         expression = """(() => {
-          const els = Array.from(document.querySelectorAll('button,input[type="submit"],[role="button"]'));
+          const els = Array.from(document.querySelectorAll('button,a,[role="button"],input[type="submit"]'));
           return els.map(el => (el.innerText || el.value || '').trim()).filter(t => t.length > 0);
         })()"""
         result = await self.evaluate(expression)
